@@ -1,43 +1,23 @@
 /**
- * Exact ASCII Art Illustrations from PROMPT.md
+ * Futurama ASCII art sources.
  *
- * Planet Express Ship: https://asciiart.website/art/4158 (by Sebastian Stöcker / SSt)
- * Bender Mascot: Silver Saks
+ * The ASCII art is no longer hand-drawn text: it is produced at runtime by the
+ * Aceternity UI `AsciiArt` component, which applies an ASCII filter on top of the
+ * source images below (https://ui.aceternity.com/components/ascii-art).
+ *
+ * The image files are served from the consuming web app's `public/images/` folder.
  */
-export const PLANET_EXPRESS_SHIP_ASCII = [
-  '                     `. ___',
-  "                    __,' __`.                _..----....____",
-  "        __...--.'``;.   ,.   ;``--..__     .'    ,-._    _.-'",
-  "  _..-''-------'   `'   `'   `'     O ``-''._   (,;') _,'",
-  ",'________________                          \\`-._`-','",
-  " `._              ```````````------...___   '-.._'-:",
-  '    ```--.._      ,.                     ````--...__\\-.',
-  '            `.--. `-`                       ____    |  |`',
-  "              `. `.                       ,'`````.  ;  ;`",
-  "                `._`.        __________   `.      \\'__/`",
-  '                   `-:._____/______/___/____`.     \\  `',
-  '                               |       `._    `.    \\',
-  '                               `._________`-.   `.   `.___',
-  "                                             SSt  `------'`",
-].join('\n');
+export interface AsciiImageSource {
+  src: string;
+  alt: string;
+}
 
-export const BENDER_MASCOT_ASCII = [
-  '      _',
-  '     ( )',
-  '      H',
-  '      H',
-  '     _H_ ',
-  "  .-'-.-'-.",
-  ' /         \\',
-  '|           |',
-  "|   .-------'._",
-  "|  / /  '.' '. \\",
-  '|  \\ \\ @   @ / / ',
-  "|   '---------'        ",
-  '|    _______|  ',
-  "|  .'-+-+-+|  ",
-  "|  '.-+-+-+|         Silver Saks",
-  '|    """""" |',
-  "'-.__   __.-'",
-  '     """',
-].join('\n');
+export const PLANET_EXPRESS_SHIP_IMAGE: AsciiImageSource = {
+  src: '/images/planet-express-ship.jpg',
+  alt: 'ASCII art of the Futurama delivery ship flying through the sky',
+};
+
+export const BENDER_MASCOT_IMAGE: AsciiImageSource = {
+  src: '/images/bender.png',
+  alt: 'ASCII art of Bender smoking a cigar',
+};

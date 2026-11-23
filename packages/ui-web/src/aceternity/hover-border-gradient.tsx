@@ -31,12 +31,12 @@ export const HoverBorderGradient: React.FC<HoverBorderGradientProps> = ({
         transition={{ duration, repeat: Infinity, ease: 'linear' }}
         style={{
           background:
-            'conic-gradient(from 0deg, #14b8a6 0%, #a3e635 35%, #38bdf8 70%, #14b8a6 100%)',
+            'conic-gradient(from 0deg, #2dd4bf 0%, #52525b 40%, #14b8a6 75%, #2dd4bf 100%)',
         }}
       />
       <div
         className={cn(
-          'relative z-10 inline-flex items-center gap-2 rounded-[14px] bg-white/90 px-4 py-2 text-sm font-semibold text-slate-900 backdrop-blur-xl dark:bg-slate-950/90 dark:text-teal-200',
+          'relative z-10 inline-flex items-center gap-2 rounded-[14px] bg-white/95 px-4 py-2 text-sm font-semibold text-zinc-900 backdrop-blur-xl dark:bg-zinc-950/95 dark:text-zinc-100',
           className,
         )}
       >
