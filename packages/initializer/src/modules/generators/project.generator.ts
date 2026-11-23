@@ -5,6 +5,14 @@ import { getPinnedVersion } from '../catalog/index.js';
 import { generateUniversalAIEcosystem } from './ai-ecosystem.generator.js';
 import { generateMcpConfig } from './mcp.generator.js';
 import { generateModule } from './module.generator.js';
+import {
+  isPrettierEnabled,
+  resolveRootLinter,
+  scaffoldExternalPipeline,
+  scaffoldRootTooling,
+  scaffoldWorkspaceApp,
+  scaffoldWorkspacePackage,
+} from './workspace.generator.js';
 
 export interface GenerationResult {
   targetDir: string;
@@ -123,8 +131,13 @@ async function scaffoldSeparatedUiPackage(
     const pkgJson = {
       name: `${scope}/ui-cli`,
       version: '0.1.0',
+      private: true,
       type: 'module',
       main: 'src/index.ts',
+      scripts: {
+        build: 'tsc -p tsconfig.json',
+        typecheck: 'tsc --noEmit -p tsconfig.json',
+      },
       dependencies: {
         '@inkjs/ui': getPinnedVersion('@inkjs/ui'),
         ink: getPinnedVersion('ink'),
@@ -137,6 +150,19 @@ async function scaffoldSeparatedUiPackage(
     await fs.writeFile(
       path.join(pkgRoot, 'package.json'),
       `${JSON.stringify(pkgJson, null, 2)}\n`,
+      'utf-8',
+    );
+    await fs.writeFile(
+      path.join(pkgRoot, 'tsconfig.json'),
+      `${JSON.stringify(
+        {
+          extends: '../../tsconfig.base.json',
+          compilerOptions: { outDir: 'dist', rootDir: 'src' },
+          include: ['src/**/*'],
+        },
+        null,
+        2,
+      )}\n`,
       'utf-8',
     );
     await fs.writeFile(
@@ -159,7 +185,11 @@ export {
 `,
       'utf-8',
     );
-    created.push('packages/ui-cli/package.json', 'packages/ui-cli/src/index.ts');
+    created.push(
+      'packages/ui-cli/package.json',
+      'packages/ui-cli/tsconfig.json',
+      'packages/ui-cli/src/index.ts',
+    );
     if (config.stack.frameworks.includes('vitest')) {
       const cov = config.testing?.coverage ?? { enabled: true, threshold: 75 };
       await fs.writeFile(path.join(pkgRoot, 'vitest.config.ts'), renderVitestConfig(cov), 'utf-8');
@@ -183,8 +213,13 @@ export {
     const pkgJson = {
       name: `${scope}/ui-web`,
       version: '0.1.0',
+      private: true,
       type: 'module',
       main: 'src/index.ts',
+      scripts: {
+        build: 'tsc -p tsconfig.json',
+        typecheck: 'tsc --noEmit -p tsconfig.json',
+      },
       dependencies: deps,
       devDependencies: {
         typescript: getPinnedVersion('typescript'),
@@ -196,11 +231,28 @@ export {
       'utf-8',
     );
     await fs.writeFile(
+      path.join(pkgRoot, 'tsconfig.json'),
+      `${JSON.stringify(
+        {
+          extends: '../../tsconfig.base.json',
+          compilerOptions: { outDir: 'dist', rootDir: 'src' },
+          include: ['src/**/*'],
+        },
+        null,
+        2,
+      )}\n`,
+      'utf-8',
+    );
+    await fs.writeFile(
       path.join(pkgRoot, 'src', 'index.ts'),
       `// Shared Web UI Components (ShadCN + Aceternity UI) for ${config.project.name}\nexport const UI_WEB_KIND = 'ui-web' as const;\n`,
       'utf-8',
     );
-    created.push('packages/ui-web/package.json', 'packages/ui-web/src/index.ts');
+    created.push(
+      'packages/ui-web/package.json',
+      'packages/ui-web/tsconfig.json',
+      'packages/ui-web/src/index.ts',
+    );
     if (config.stack.frameworks.includes('vitest')) {
       const cov = config.testing?.coverage ?? { enabled: true, threshold: 75 };
       await fs.writeFile(path.join(pkgRoot, 'vitest.config.ts'), renderVitestConfig(cov), 'utf-8');
@@ -246,8 +298,13 @@ export {
     const pkgJson = {
       name: `${scope}/ui-mobile`,
       version: '0.1.0',
+      private: true,
       type: 'module',
       main: 'src/index.ts',
+      scripts: {
+        build: 'tsc -p tsconfig.json',
+        typecheck: 'tsc --noEmit -p tsconfig.json',
+      },
       dependencies: deps,
       devDependencies: {
         typescript: getPinnedVersion('typescript'),
@@ -259,11 +316,28 @@ export {
       'utf-8',
     );
     await fs.writeFile(
+      path.join(pkgRoot, 'tsconfig.json'),
+      `${JSON.stringify(
+        {
+          extends: '../../tsconfig.base.json',
+          compilerOptions: { outDir: 'dist', rootDir: 'src' },
+          include: ['src/**/*'],
+        },
+        null,
+        2,
+      )}\n`,
+      'utf-8',
+    );
+    await fs.writeFile(
       path.join(pkgRoot, 'src', 'index.ts'),
       `// Shared Mobile UI Components (React Native / Lynx) for ${config.project.name}\nexport const UI_MOBILE_KIND = 'ui-mobile' as const;\n`,
       'utf-8',
     );
-    created.push('packages/ui-mobile/package.json', 'packages/ui-mobile/src/index.ts');
+    created.push(
+      'packages/ui-mobile/package.json',
+      'packages/ui-mobile/tsconfig.json',
+      'packages/ui-mobile/src/index.ts',
+    );
   }
 
   return created;
@@ -289,8 +363,10 @@ export async function generateProject(
   }
 
   const coverage = config.testing?.coverage ?? { enabled: true, threshold: 75 };
+  const rootLinter = resolveRootLinter(config);
+  const prettierEnabled = isPrettierEnabled(config);
 
-  // 3. Root package.json + tsconfig.json (if TypeScript is selected)
+  // 3. Root package.json + tsconfig.json + root-only linter & prettier (if TypeScript is selected)
   if (config.stack.languages.includes('typescript')) {
     const devDeps: Record<string, string> = {
       typescript: getPinnedVersion('typescript'),
@@ -310,16 +386,17 @@ export async function generateProject(
     if (config.stack.frameworks.includes('playwright')) {
       devDeps['@playwright/test'] = getPinnedVersion('@playwright/test');
     }
-    if (config.stack.frameworks.includes('eslint')) {
+    if (rootLinter === 'eslint' || config.stack.frameworks.includes('eslint')) {
       devDeps.eslint = getPinnedVersion('eslint');
     }
-    if (config.stack.frameworks.includes('biome')) {
+    if (rootLinter === 'biome' || config.stack.frameworks.includes('biome')) {
       devDeps['@biomejs/biome'] = getPinnedVersion('@biomejs/biome');
     }
-    if (config.stack.frameworks.includes('oxc')) {
+    if (rootLinter === 'oxlint' || config.stack.frameworks.includes('oxc')) {
       devDeps.oxlint = getPinnedVersion('oxlint');
     }
     if (
+      prettierEnabled ||
       config.stack.frameworks.includes('prettier') ||
       config.stack.tools.includes('commitlint-husky-prettier')
     ) {
@@ -340,6 +417,15 @@ export async function generateProject(
       deps.react = getPinnedVersion('react');
     }
 
+    const lintScript =
+      rootLinter === 'eslint'
+        ? 'eslint .'
+        : rootLinter === 'biome'
+          ? 'biome lint .'
+          : rootLinter === 'oxlint'
+            ? 'oxlint .'
+            : 'echo "No root linter configured"';
+
     const pkgJson: Record<string, unknown> = {
       name: config.project.name,
       version: '0.1.0',
@@ -352,17 +438,27 @@ export async function generateProject(
         : {}),
       scripts: {
         build: config.stack.monorepo ? 'nx run-many -t build' : 'tsc',
-        test: config.stack.frameworks.includes('vitest')
-          ? 'vitest run'
-          : config.stack.frameworks.includes('jest')
-            ? 'jest'
-            : 'echo "No test runner configured"',
+        test: config.stack.monorepo
+          ? 'nx run-many -t test'
+          : config.stack.frameworks.includes('vitest')
+            ? 'vitest run'
+            : config.stack.frameworks.includes('jest')
+              ? 'jest'
+              : 'echo "No test runner configured"',
         ...(coverage.enabled && config.stack.frameworks.includes('vitest')
           ? { 'test:coverage': 'vitest run --coverage' }
           : coverage.enabled && config.stack.frameworks.includes('jest')
             ? { 'test:coverage': 'jest --coverage' }
             : {}),
-        typecheck: 'tsc --noEmit',
+        typecheck: config.stack.monorepo ? 'nx run-many -t typecheck' : 'tsc --noEmit',
+        lint: lintScript,
+        ...(prettierEnabled
+          ? {
+              format: 'prettier --write .',
+              'format:check': 'prettier --check .',
+            }
+          : {}),
+        pipeline: 'bash scripts/pipeline.sh --all',
       },
       ...(Object.keys(deps).length > 0 ? { dependencies: deps } : {}),
       devDependencies: devDeps,
@@ -440,7 +536,10 @@ export async function generateProject(
     }
   }
 
-  // 4. Security & Quality Configs
+  // 4. Root-only Linter, Prettier (default), tsconfig.base.json & Security Configs
+  const rootToolFiles = await scaffoldRootTooling(targetDir, config);
+  filesCreated.push(...rootToolFiles);
+
   if (config.stack.tools.includes('security-checker')) {
     await fs.writeFile(
       path.join(targetDir, '.opengrep.yml'),
@@ -457,11 +556,6 @@ export async function generateProject(
 
   if (config.stack.tools.includes('commitlint-husky-prettier')) {
     await fs.writeFile(
-      path.join(targetDir, '.prettierrc'),
-      `${JSON.stringify({ semi: true, singleQuote: true, trailingComma: 'all', printWidth: 100 }, null, 2)}\n`,
-      'utf-8',
-    );
-    await fs.writeFile(
       path.join(targetDir, 'commitlint.config.mjs'),
       `export default { extends: ['@commitlint/config-conventional'] };\n`,
       'utf-8',
@@ -472,7 +566,7 @@ export async function generateProject(
       'npx commitlint --edit "$1"\n',
       'utf-8',
     );
-    filesCreated.push('.prettierrc', 'commitlint.config.mjs', '.husky/commit-msg');
+    filesCreated.push('commitlint.config.mjs', '.husky/commit-msg');
   }
 
   if (config.stack.frameworks.includes('aceternity-ui')) {
@@ -488,7 +582,7 @@ export async function generateProject(
   const hasNonJs = config.stack.languages.some((l) => l !== 'typescript');
   if (config.stack.useMakefiles && hasNonJs) {
     const makeLines = [
-      '# Planet Express Polyglot Makefile',
+      '# little.bootstrapper Polyglot Makefile',
       '.PHONY: build test lint',
       '',
       'build:',
@@ -514,31 +608,28 @@ export async function generateProject(
     filesCreated.push(...uiFiles);
   }
 
-  // 7. Workspace apps & packages
-  for (const app of config.workspace.apps) {
-    const appDir = path.join(targetDir, 'apps', app.name);
-    await fs.mkdir(path.join(appDir, 'src'), { recursive: true });
-    await fs.writeFile(
-      path.join(appDir, 'README.md'),
-      `# ${app.name}\n\nLanguage: ${app.language} | Framework: ${app.framework}\n`,
-      'utf-8',
-    );
-    filesCreated.push(`apps/${app.name}/README.md`);
-  }
+  // 7. Initialized Workspace Packages & Apps (Contracts, Backend Health Endpoint, Web Sample App)
+  const hasContracts = config.workspace.packages.some(
+    (p) => p.kind === 'contracts' || p.name === 'contracts',
+  );
+  const hasUiWeb = uiPackagesCreated.includes('ui-web');
 
   for (const pkg of config.workspace.packages) {
     if (pkg.name === 'ui-cli' || pkg.name === 'ui-web' || pkg.name === 'ui-mobile') {
       continue;
     }
-    const pkgDir = path.join(targetDir, 'packages', pkg.name);
-    await fs.mkdir(path.join(pkgDir, 'src'), { recursive: true });
-    await fs.writeFile(
-      path.join(pkgDir, 'README.md'),
-      `# ${pkg.name}\n\nLanguage: ${pkg.language} | Framework: ${pkg.framework}\n`,
-      'utf-8',
-    );
-    filesCreated.push(`packages/${pkg.name}/README.md`);
+    const pkgFiles = await scaffoldWorkspacePackage(targetDir, pkg, config);
+    filesCreated.push(...pkgFiles);
   }
+
+  for (const app of config.workspace.apps) {
+    const appFiles = await scaffoldWorkspaceApp(targetDir, app, config, hasContracts, hasUiWeb);
+    filesCreated.push(...appFiles);
+  }
+
+  // 7b. External Bootstrap & Delivery Pipeline + Architecture Documentation
+  const pipelineFiles = await scaffoldExternalPipeline(targetDir, config, uiPackagesCreated);
+  filesCreated.push(...pipelineFiles);
 
   // 8. Example module following architecture & naming conventions
   if (config.architecture.exampleModule) {
@@ -560,7 +651,7 @@ export async function generateProject(
   // 10. CHANGELOG.md & GitHub PR Validation + Tag Release Pipelines
   await fs.writeFile(
     path.join(targetDir, 'CHANGELOG.md'),
-    `# Changelog\n\nAll notable changes to **${config.project.name}** are documented here.\n\n## [0.1.0] - ${new Date().toISOString().slice(0, 10)}\n\n### Added\n- Initial scaffold bootstrapped with Planet Express (\`little.bootstrapper\`).\n`,
+    `# Changelog\n\nAll notable changes to **${config.project.name}** are documented here.\n\n## [0.1.0] - ${new Date().toISOString().slice(0, 10)}\n\n### Added\n- Initial scaffold bootstrapped with little.bootstrapper.\n`,
     'utf-8',
   );
   filesCreated.push('CHANGELOG.md');
@@ -572,9 +663,10 @@ export async function generateProject(
     (config.stack.frameworks.includes('vitest') || config.stack.frameworks.includes('jest'))
       ? `      - run: ${config.stack.packageManager} test:coverage\n`
       : '';
+  const runCmd = config.stack.packageManager === 'npm' ? 'npm run' : config.stack.packageManager;
   await fs.writeFile(
     path.join(workflowsDir, 'pr-validation.yml'),
-    `name: PR Validation & Pattern Gate\non:\n  pull_request:\n    branches: [main]\njobs:\n  validate:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-node@v4\n        with:\n          node-version: '22'\n      - run: npx little-bootstrapper validate\n${coverageCiStep}`,
+    `name: PR Validation & Pattern Gate\non:\n  pull_request:\n    branches: [main]\njobs:\n  validate:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-node@v4\n        with:\n          node-version: '22'\n      - run: ${config.stack.packageManager} install\n${prettierEnabled ? `      - run: ${runCmd} format:check\n` : ''}${rootLinter !== 'none' ? `      - run: ${runCmd} lint\n` : ''}      - run: ${runCmd} typecheck\n      - run: ${runCmd} build\n      - run: ${runCmd} test\n      - run: npx little-bootstrapper validate\n${coverageCiStep}`,
     'utf-8',
   );
   await fs.writeFile(
@@ -585,21 +677,51 @@ export async function generateProject(
   filesCreated.push('.github/workflows/pr-validation.yml', '.github/workflows/release.yml');
 
   // 11. README.md
+  const appsDoc = config.workspace.apps
+    .map((a) => `- \`apps/${a.name}\` (${a.language} / ${a.framework})`)
+    .join('\n');
+  const pkgsDoc = [
+    ...config.workspace.packages.map(
+      (p) => `- \`packages/${p.name}\` (${p.language} / ${p.framework})`,
+    ),
+    ...uiPackagesCreated.map((u) => `- \`packages/${u}\` (separated UI package)`),
+  ].join('\n');
+
   const readme = `# ${config.project.name}
 
 > ${config.project.description}
 
-Bootstrapped with **little.bootstrapper** (Planet Express Universal AI Agent Initializer).
+Bootstrapped with **little.bootstrapper**, a library and CLI for consistent project setup.
+
+## Quickstart & External Pipeline
+
+Run the standalone delivery pipeline outside the CLI:
+
+\`\`\`bash
+./scripts/pipeline.sh --all
+\`\`\`
+
+See [docs/PIPELINE.md](./docs/PIPELINE.md) for full pipeline stages, root-only linting, and workspace verification.
 
 ## Stack
 
 - **Languages**: ${config.stack.languages.join(', ')}
 - **Package Manager**: ${config.stack.packageManager}
+- **Root Linter**: ${rootLinter} (root only)
+- **Root Formatter**: Prettier (${prettierEnabled ? 'enabled at root by default' : 'disabled'})
 - **Frameworks**: ${config.stack.frameworks.join(', ') || 'None'}
 - **Separated UI Packages**: ${uiPackagesCreated.map((u) => `packages/${u}`).join(', ') || 'None'}
 - **Architecture**: ${config.architecture.pattern} (${config.architecture.folderOrganization}, ${config.architecture.fileNaming})
 - **Test Coverage**: ${coverage.enabled ? `Enabled (${coverage.threshold}% threshold)` : 'Disabled'}
 - **AI Agents**: ${config.stack.agents.join(', ')}
+
+## Initialized Workspaces
+
+### Apps
+${appsDoc || '- None'}
+
+### Packages
+${pkgsDoc || '- None'}
 `;
   await fs.writeFile(path.join(targetDir, 'README.md'), readme, 'utf-8');
   filesCreated.push('README.md');

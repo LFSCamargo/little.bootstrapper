@@ -25,9 +25,10 @@ export async function runInitCommand(
     .map((s) => s.trim())
     .filter(Boolean);
   const rawPm = getFlagValue(rawArgs, '--pm') ?? 'yarn';
+  const rawLinter = getFlagValue(rawArgs, '--linter') ?? 'eslint';
   const rawFrameworks = (
     getFlagValue(rawArgs, '--frameworks') ??
-    'ink,nextjs,react-native,vitest,playwright,shadcn,aceternity-ui'
+    'hono,ink,nextjs,react-native,vitest,playwright,shadcn,aceternity-ui'
   )
     .split(',')
     .map((s) => s.trim())
@@ -58,12 +59,14 @@ export async function runInitCommand(
 
   const validated = InitCommandArgsSchema.safeParse({
     name: rawName,
-    description: getFlagValue(rawArgs, '--description') ?? 'Bootstrapped with Planet Express',
+    description: getFlagValue(rawArgs, '--description') ?? 'Bootstrapped with little.bootstrapper',
     author: getFlagValue(rawArgs, '--author') ?? 'fry',
     codeowners: !hasFlag(rawArgs, '--no-codeowners'),
     monorepo: !hasFlag(rawArgs, '--no-monorepo'),
     languages: rawLanguages,
     packageManager: rawPm,
+    linter: rawLinter,
+    prettier: true,
     frameworks: rawFrameworks,
     mcps: rawMcps,
     domains: rawDomains,
@@ -93,6 +96,8 @@ export async function runInitCommand(
       packageManager: args.packageManager,
       monorepo: args.monorepo,
       useMakefiles: args.languages.some((l) => l !== 'typescript'),
+      linter: args.linter ?? 'eslint',
+      prettier: args.prettier ?? true,
       frameworks: args.frameworks,
       tools: ADDITIONAL_TOOLS.map((t) => t.id),
       agents: AI_AGENTS.map((a) => a.id),
@@ -101,8 +106,19 @@ export async function runInitCommand(
       ...(args.rules ? { rules: args.rules } : {}),
     },
     workspace: {
-      apps: [{ name: 'web', language: 'typescript', framework: 'nextjs' }],
-      packages: [{ name: 'core', language: 'typescript', framework: 'vitest' }],
+      apps: [
+        {
+          name: 'api',
+          language: 'typescript',
+          framework:
+            args.packageManager === 'bun' && args.frameworks.includes('elysia') ? 'elysia' : 'hono',
+          kind: 'backend',
+        },
+        { name: 'web', language: 'typescript', framework: 'nextjs', kind: 'web' },
+      ],
+      packages: [
+        { name: 'contracts', language: 'typescript', framework: 'vitest', kind: 'contracts' },
+      ],
     },
     architecture: {
       pattern: 'modular',

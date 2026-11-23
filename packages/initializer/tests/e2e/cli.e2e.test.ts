@@ -8,8 +8,8 @@ import path from 'node:path';
 const execFileAsync = promisify(execFile);
 const CLI_BIN = path.resolve(import.meta.dirname, '../../dist/cli.js');
 
-describe('Planet Express CLI (E2E)', () => {
-  it('renders exact SSt Planet Express Ship ASCII art on --help and reports version', async () => {
+describe('little.bootstrapper CLI (E2E)', () => {
+  it('renders exact SSt Futurama delivery ship ASCII art on --help and reports version', async () => {
     const help = await execFileAsync('node', [CLI_BIN, '--help']);
     expect(help.stdout).toContain('SSt');
     expect(help.stdout).toContain("(,;')");

@@ -7,6 +7,7 @@ import type {
   PackageManager,
   ProjectDomain,
   ProjectInfo,
+  RootLinter,
   UiPackageKind,
   WorkspaceEntry,
 } from './stack.types.js';
@@ -18,6 +19,8 @@ export interface StackConfig {
   packageManager: PackageManager;
   monorepo: boolean;
   useMakefiles: boolean;
+  linter?: RootLinter;
+  prettier?: boolean;
   frameworks: Framework[];
   tools: AdditionalTool[];
   agents: AIAgent[];

@@ -175,4 +175,106 @@ describe('modules/generators (integration)', () => {
       await fs.rm(tmpJest, { recursive: true, force: true });
     }
   });
+
+  it('scaffolds full starter product (Backend /health, Contracts, Web Sample App), root-only linter + Prettier, and outside pipeline', async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'pe-gen-product-'));
+    try {
+      const config: BootstrapConfig = {
+        version: '1.0.0',
+        project: {
+          name: 'nimbus-starter',
+          description: 'Full starter product monorepo',
+          author: 'leela',
+          codeowners: true,
+        },
+        stack: {
+          languages: ['typescript', 'golang', 'rust', 'solidity'],
+          packageManager: 'yarn',
+          monorepo: true,
+          useMakefiles: true,
+          linter: 'biome',
+          prettier: true,
+          frameworks: ['hono', 'nextjs', 'vitest', 'shadcn'],
+          tools: ['security-checker', 'commitlint-husky-prettier'],
+          agents: ['claude', 'cursor'],
+        },
+        workspace: {
+          apps: [
+            { name: 'api', language: 'typescript', framework: 'hono', kind: 'backend' },
+            { name: 'web', language: 'typescript', framework: 'nextjs', kind: 'web' },
+            { name: 'express-svc', language: 'typescript', framework: 'express', kind: 'backend' },
+            { name: 'fastify-svc', language: 'typescript', framework: 'fastify', kind: 'backend' },
+            { name: 'koa-svc', language: 'typescript', framework: 'koa', kind: 'backend' },
+            { name: 'go-svc', language: 'golang', framework: 'gin', kind: 'backend' },
+            { name: 'rust-svc', language: 'rust', framework: 'axum', kind: 'backend' },
+            { name: 'vite-portal', language: 'typescript', framework: 'react-vite', kind: 'web' },
+          ],
+          packages: [
+            { name: 'contracts', language: 'typescript', framework: 'vitest', kind: 'contracts' },
+            { name: 'go-lib', language: 'golang', framework: 'chi', kind: 'library' },
+            { name: 'rust-lib', language: 'rust', framework: 'hyper', kind: 'library' },
+            { name: 'evm-kit', language: 'solidity', framework: 'foundry', kind: 'library' },
+          ],
+        },
+        architecture: {
+          pattern: 'modular',
+          folderOrganization: 'module-based',
+          fileNaming: 'kebab-case',
+          testOrganization: 'dedicated-tests',
+          strictBoundaries: true,
+          pathAliases: true,
+          barrelExports: true,
+          exampleModule: true,
+        },
+      };
+
+      const res = await generateProject(tmpDir, config);
+
+      // Root-only linter (biome) + root Prettier default + tsconfig.base.json
+      expect(res.filesCreated).toContain('tsconfig.base.json');
+      expect(res.filesCreated).toContain('biome.json');
+      expect(res.filesCreated).toContain('.prettierrc');
+      expect(res.filesCreated).toContain('.prettierignore');
+      expect(res.filesCreated).not.toContain('apps/api/biome.json');
+      expect(res.filesCreated).not.toContain('packages/contracts/.prettierrc');
+
+      // Outside pipeline & docs
+      expect(res.filesCreated).toContain('scripts/pipeline.sh');
+      expect(res.filesCreated).toContain('docs/PIPELINE.md');
+
+      // Initialized Contracts, Backend Health Endpoint, and Web Sample App
+      expect(res.filesCreated).toContain('packages/contracts/package.json');
+      expect(res.filesCreated).toContain('packages/contracts/src/health.contract.ts');
+      expect(res.filesCreated).toContain(
+        'packages/contracts/src/__tests__/health.contract.test.ts',
+      );
+      expect(res.filesCreated).toContain('apps/api/package.json');
+      expect(res.filesCreated).toContain('apps/api/src/app.ts');
+      expect(res.filesCreated).toContain('apps/api/src/__tests__/health.test.ts');
+      expect(res.filesCreated).toContain('apps/web/package.json');
+      expect(res.filesCreated).toContain('apps/web/src/app/layout.tsx');
+      expect(res.filesCreated).toContain('apps/web/src/app/page.tsx');
+      expect(res.filesCreated).toContain('apps/web/src/components/health-panel.tsx');
+
+      // Polyglot per-workspace initialization
+      expect(res.filesCreated).toContain('apps/go-svc/main.go');
+      expect(res.filesCreated).toContain('apps/rust-svc/Cargo.toml');
+      expect(res.filesCreated).toContain('packages/evm-kit/src/SampleContract.sol');
+
+      const apiPkg = JSON.parse(
+        await fs.readFile(path.join(tmpDir, 'apps/api/package.json'), 'utf-8'),
+      ) as { dependencies: Record<string, string> };
+      expect(apiPkg.dependencies['@nimbus-starter/contracts']).toBe('workspace:*');
+      expect(apiPkg.dependencies.hono).toBe('4.7.7');
+
+      const webLayout = await fs.readFile(
+        path.join(tmpDir, 'apps/web/src/app/layout.tsx'),
+        'utf-8',
+      );
+      expect(webLayout).toContain('metadataBase');
+      expect(webLayout).toContain('suppressHydrationWarning');
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  });
 });

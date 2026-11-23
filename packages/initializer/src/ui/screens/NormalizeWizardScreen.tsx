@@ -179,6 +179,7 @@ export const NormalizeWizardScreen: React.FC<NormalizeWizardScreenProps> = ({
           ]}
         />
         <Select
+          defaultValue={normalizingAgent}
           options={AI_AGENTS.map((a) => ({ label: `${a.label} — ${a.description}`, value: a.id }))}
           onChange={(val) => {
             setNormalizingAgent(val as AIAgent);

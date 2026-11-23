@@ -50,9 +50,12 @@ export const AUDITED_VERSIONS: Record<string, AuditedPackageVersion> = {
   // REST APIs
   elysia: audited('elysia', '1.2.25'),
   express: audited('express', '5.1.0'),
+  '@types/express': audited('@types/express', '5.0.1'),
   koa: audited('koa', '2.16.1'),
+  '@types/koa': audited('@types/koa', '2.15.0'),
   fastify: audited('fastify', '5.3.2'),
   hono: audited('hono', '4.7.7'),
+  '@hono/node-server': audited('@hono/node-server', '1.14.1'),
 
   // Testing
   vitest: audited('vitest', '3.1.1'),

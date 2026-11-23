@@ -4,6 +4,8 @@ import type {
   Framework,
   Language,
   PackageManager,
+  RootLinter,
+  WorkspaceKind,
 } from '../../types/index.js';
 
 export interface CatalogItem<T extends string = string> {
@@ -21,6 +23,62 @@ export const PACKAGE_MANAGERS: CatalogItem<PackageManager>[] = [
   { id: 'npm', label: 'NPM', description: 'Default Node.js package manager' },
   { id: 'pnpm', label: 'PNPM', description: 'Fast, disk space efficient package manager' },
   { id: 'bun', label: 'Bun', description: 'All-in-one JavaScript runtime & package manager' },
+];
+
+export const ROOT_LINTERS: CatalogItem<RootLinter>[] = [
+  {
+    id: 'eslint',
+    label: 'ESLint (Root Only)',
+    description: 'Flat-config eslint.config.mjs at repository root',
+  },
+  {
+    id: 'biome',
+    label: 'Biome (Root Only)',
+    description: 'Single biome.json linter config at repository root',
+  },
+  {
+    id: 'oxlint',
+    label: 'Oxlint (Root Only)',
+    description: 'Ultra-fast .oxlintrc.json linter config at repository root',
+  },
+  {
+    id: 'none',
+    label: 'None',
+    description: 'Skip root linter (Prettier formatting still enabled at root by default)',
+  },
+];
+
+export const WORKSPACE_KINDS: CatalogItem<WorkspaceKind>[] = [
+  {
+    id: 'backend',
+    label: 'Backend Service / API',
+    description: 'HTTP service scaffolded with a typed GET /health endpoint',
+  },
+  {
+    id: 'web',
+    label: 'Web Application',
+    description: 'Frontend web sample app consuming shared contracts & API health',
+  },
+  {
+    id: 'contracts',
+    label: 'Shared Contracts',
+    description: 'Shared Zod schemas & TypeScript contracts consumed by apps',
+  },
+  {
+    id: 'library',
+    label: 'Shared Library',
+    description: 'Reusable domain package with clean exports & unit test',
+  },
+  {
+    id: 'cli',
+    label: 'CLI Tool',
+    description: 'Command-line application or terminal UI package',
+  },
+  {
+    id: 'mobile',
+    label: 'Mobile App',
+    description: 'Cross-platform mobile application workspace',
+  },
 ];
 
 export const LANGUAGES: CatalogItem<Language>[] = [
@@ -553,4 +611,61 @@ export function getCompatibleFrameworks(
     }
     return true;
   });
+}
+
+const BACKEND_FW_IDS = new Set<Framework>([
+  'hono',
+  'express',
+  'fastify',
+  'koa',
+  'elysia',
+  'fiber',
+  'gin',
+  'chi',
+  'echo',
+  'axum',
+  'hyper',
+]);
+
+const WEB_FW_IDS = new Set<Framework>(['nextjs', 'react-vite', 'nuxtjs', 'tauri']);
+const MOBILE_FW_IDS = new Set<Framework>(['react-native', 'lynx']);
+const CLI_FW_IDS = new Set<Framework>(['ink']);
+const LIBRARY_FW_IDS = new Set<Framework>([
+  'vitest',
+  'jest',
+  'drizzle',
+  'kysely',
+  'typeorm',
+  'mongoose',
+  'anchor',
+  'soroban-sdk',
+  'near-sdk',
+  'stylus-sdk',
+  'foundry',
+  'hardhat',
+]);
+
+export function getFrameworksForWorkspace(
+  language: Language,
+  packageManager: PackageManager,
+  kind?: WorkspaceKind,
+): CatalogItem<Framework>[] {
+  const compatible = getCompatibleFrameworks([language], packageManager).filter(
+    (fw) => fw.category !== 'Lint/Format',
+  );
+  if (!kind) return compatible;
+
+  let filtered: CatalogItem<Framework>[] = compatible;
+  if (kind === 'backend') {
+    filtered = compatible.filter((fw) => BACKEND_FW_IDS.has(fw.id));
+  } else if (kind === 'web') {
+    filtered = compatible.filter((fw) => WEB_FW_IDS.has(fw.id));
+  } else if (kind === 'mobile') {
+    filtered = compatible.filter((fw) => MOBILE_FW_IDS.has(fw.id));
+  } else if (kind === 'cli') {
+    filtered = compatible.filter((fw) => CLI_FW_IDS.has(fw.id));
+  } else if (kind === 'contracts' || kind === 'library') {
+    filtered = compatible.filter((fw) => LIBRARY_FW_IDS.has(fw.id));
+  }
+  return filtered.length > 0 ? filtered : compatible;
 }

@@ -30,8 +30,10 @@ import type {
   McpServerId,
   PackageManager,
   ProjectDomain,
+  RootLinter,
   TestFileOrganization,
   WorkspaceEntry,
+  WorkspaceKind,
 } from '../../types/index.js';
 import {
   ADDITIONAL_TOOLS,
@@ -40,8 +42,11 @@ import {
   LANGUAGES,
   PACKAGE_MANAGERS,
   PROJECT_DOMAINS,
+  ROOT_LINTERS,
   VERIFIED_MCPS,
+  WORKSPACE_KINDS,
   getCompatibleFrameworks,
+  getFrameworksForWorkspace,
   recommendMcpsForProject,
   resolveRulesForProject,
 } from '../../modules/catalog/index.js';
@@ -75,6 +80,7 @@ type InitStep =
   | 'codeowners'
   | 'languages'
   | 'package-manager'
+  | 'root-linter'
   | 'monorepo'
   | 'makefiles'
   | 'frameworks'
@@ -84,7 +90,17 @@ type InitStep =
   | 'mcps'
   | 'apps-packages'
   | 'add-app-name'
+  | 'add-app-kind'
+  | 'add-app-lang'
+  | 'add-app-fw'
   | 'add-pkg-name'
+  | 'add-pkg-kind'
+  | 'add-pkg-lang'
+  | 'add-pkg-fw'
+  | 'edit-ws-select'
+  | 'edit-ws-lang'
+  | 'edit-ws-fw'
+  | 'remove-ws-select'
   | 'arch-pattern'
   | 'folder-org'
   | 'file-naming'
@@ -96,6 +112,8 @@ type InitStep =
   | 'generating'
   | 'done';
 
+const TOTAL_STEPS = 22;
+
 const STEP_INDEX: Record<InitStep, number> = {
   'repo-name': 1,
   description: 2,
@@ -103,26 +121,37 @@ const STEP_INDEX: Record<InitStep, number> = {
   codeowners: 4,
   languages: 5,
   'package-manager': 6,
-  monorepo: 7,
-  makefiles: 7,
-  frameworks: 8,
-  domains: 9,
-  tools: 10,
-  agents: 11,
-  mcps: 12,
-  'apps-packages': 13,
-  'add-app-name': 13,
-  'add-pkg-name': 13,
-  'arch-pattern': 14,
-  'folder-org': 15,
-  'file-naming': 16,
-  'test-org': 17,
-  'coverage-enabled': 18,
-  'coverage-threshold': 19,
-  'arch-options': 20,
-  preview: 21,
-  generating: 21,
-  done: 21,
+  'root-linter': 7,
+  monorepo: 8,
+  makefiles: 8,
+  frameworks: 9,
+  domains: 10,
+  tools: 11,
+  agents: 12,
+  mcps: 13,
+  'apps-packages': 14,
+  'add-app-name': 14,
+  'add-app-kind': 14,
+  'add-app-lang': 14,
+  'add-app-fw': 14,
+  'add-pkg-name': 14,
+  'add-pkg-kind': 14,
+  'add-pkg-lang': 14,
+  'add-pkg-fw': 14,
+  'edit-ws-select': 14,
+  'edit-ws-lang': 14,
+  'edit-ws-fw': 14,
+  'remove-ws-select': 14,
+  'arch-pattern': 15,
+  'folder-org': 16,
+  'file-naming': 17,
+  'test-org': 18,
+  'coverage-enabled': 19,
+  'coverage-threshold': 20,
+  'arch-options': 21,
+  preview: 22,
+  generating: 22,
+  done: 22,
 };
 
 const MULTISELECT_STEPS = new Set<InitStep>([
@@ -158,9 +187,11 @@ export const InitWizardScreen: React.FC<InitWizardScreenProps> = ({
   const [codeowners, setCodeowners] = useState(true);
   const [languages, setLanguages] = useState<Language[]>(['typescript']);
   const [packageManager, setPackageManager] = useState<PackageManager>('yarn');
+  const [rootLinter, setRootLinter] = useState<RootLinter>('eslint');
   const [monorepo, setMonorepo] = useState(true);
   const [useMakefiles, setUseMakefiles] = useState(false);
   const [frameworks, setFrameworks] = useState<Framework[]>([
+    'hono',
     'nextjs',
     'ink',
     'vitest',
@@ -174,12 +205,19 @@ export const InitWizardScreen: React.FC<InitWizardScreenProps> = ({
   const [agents, setAgents] = useState<AIAgent[]>(AI_AGENTS.map((a) => a.id));
   const [mcps, setMcps] = useState<McpServerId[]>(DEFAULT_VERIFIED_MCPS);
   const [apps, setApps] = useState<WorkspaceEntry[]>([
-    { name: 'web', language: 'typescript', framework: 'nextjs' },
+    { name: 'api', language: 'typescript', framework: 'hono', kind: 'backend' },
+    { name: 'web', language: 'typescript', framework: 'nextjs', kind: 'web' },
   ]);
   const [packages, setPackages] = useState<WorkspaceEntry[]>([
-    { name: 'core', language: 'typescript', framework: 'vitest' },
+    { name: 'contracts', language: 'typescript', framework: 'vitest', kind: 'contracts' },
   ]);
   const [draftName, setDraftName] = useState('');
+  const [draftKind, setDraftKind] = useState<WorkspaceKind>('backend');
+  const [draftLang, setDraftLang] = useState<Language>('typescript');
+  const [editingTarget, setEditingTarget] = useState<{
+    bucket: 'app' | 'package';
+    index: number;
+  } | null>(null);
   const [arch, setArch] = useState<ArchitectureConfig>({
     pattern: 'modular',
     folderOrganization: 'module-based',
@@ -241,6 +279,8 @@ export const InitWizardScreen: React.FC<InitWizardScreenProps> = ({
         packageManager,
         monorepo,
         useMakefiles,
+        linter: rootLinter,
+        prettier: true,
         frameworks,
         tools,
         agents,
@@ -263,6 +303,7 @@ export const InitWizardScreen: React.FC<InitWizardScreenProps> = ({
       codeowners,
       languages,
       packageManager,
+      rootLinter,
       monorepo,
       useMakefiles,
       frameworks,
@@ -279,7 +320,10 @@ export const InitWizardScreen: React.FC<InitWizardScreenProps> = ({
   );
 
   const compatibleFrameworks = useMemo(
-    () => getCompatibleFrameworks(languages, packageManager),
+    () =>
+      getCompatibleFrameworks(languages, packageManager).filter(
+        (fw) => fw.category !== 'Lint/Format',
+      ),
     [languages, packageManager],
   );
   const compatiblePatterns = useMemo(
@@ -292,16 +336,20 @@ export const InitWizardScreen: React.FC<InitWizardScreenProps> = ({
     () => [
       `${configSnapshot.project.name}/`,
       '  bootstrap.config.json',
+      '  scripts/pipeline.sh (outside delivery pipeline)',
+      '  docs/PIPELINE.md (pipeline & workspace docs)',
+      `  root tooling: ${rootLinter} (root only) + .prettierrc (default)`,
       ...(mcps.length > 0 ? ['  mcp.json'] : []),
       '  .ai/rules/ (' + activeRules.length + ' context-selective rules)',
       '  .github/workflows/ (pr-validation.yml, release.yml)',
       ...requiredUi.map((u) => `  packages/${u}/`),
-      ...apps.map((a) => `  apps/${a.name}/`),
-      ...packages.map((p) => `  packages/${p.name}/`),
+      ...apps.map((a) => `  apps/${a.name}/ (${a.language} / ${a.framework})`),
+      ...packages.map((p) => `  packages/${p.name}/ (${p.language} / ${p.framework})`),
       ...generateFolderStructurePreview(arch, languages[0] ?? 'typescript').map((l) => `  ${l}`),
     ],
     [
       configSnapshot.project.name,
+      rootLinter,
       mcps,
       activeRules.length,
       requiredUi,
@@ -319,6 +367,10 @@ export const InitWizardScreen: React.FC<InitWizardScreenProps> = ({
       {
         field: 'Stack',
         value: `${languages.join(', ')} • ${packageManager} • ${monorepo ? 'NX Monorepo' : 'Single Pkg'}`,
+      },
+      {
+        field: 'Root Quality',
+        value: `Linter: ${rootLinter} (root only) • Prettier: enabled (root default)`,
       },
       { field: 'Domains', value: domains.join(', ') },
       {
@@ -342,6 +394,7 @@ export const InitWizardScreen: React.FC<InitWizardScreenProps> = ({
       description,
       languages,
       packageManager,
+      rootLinter,
       monorepo,
       domains,
       arch,
@@ -452,7 +505,7 @@ export const InitWizardScreen: React.FC<InitWizardScreenProps> = ({
         workflow="INIT"
         stepName={step}
         currentStep={STEP_INDEX[step]}
-        totalSteps={21}
+        totalSteps={TOTAL_STEPS}
       />
 
       {step === 'repo-name' && (
@@ -534,6 +587,7 @@ export const InitWizardScreen: React.FC<InitWizardScreenProps> = ({
         <Box gap={1}>
           <Text bold>Setup CODEOWNERS?</Text>
           <ConfirmInput
+            defaultChoice={codeowners ? 'confirm' : 'cancel'}
             onConfirm={() => {
               setCodeowners(true);
               goTo('languages');
@@ -572,6 +626,23 @@ export const InitWizardScreen: React.FC<InitWizardScreenProps> = ({
             }))}
             onChange={(value) => {
               setPackageManager(value as PackageManager);
+              goTo('root-linter');
+            }}
+          />
+        </Box>
+      )}
+
+      {step === 'root-linter' && (
+        <Box flexDirection="column">
+          <Text bold>Root-Only Linter (Prettier is enabled at root by default):</Text>
+          <Select
+            defaultValue={rootLinter}
+            options={ROOT_LINTERS.map((l) => ({
+              label: `${l.label} — ${l.description}`,
+              value: l.id,
+            }))}
+            onChange={(value) => {
+              setRootLinter(value as RootLinter);
               goTo('monorepo');
             }}
           />
@@ -604,6 +675,7 @@ export const InitWizardScreen: React.FC<InitWizardScreenProps> = ({
         <Box gap={1}>
           <Text bold>Use Makefiles for non-JavaScript Projects?</Text>
           <ConfirmInput
+            defaultChoice={useMakefiles ? 'confirm' : 'cancel'}
             onConfirm={() => {
               setUseMakefiles(true);
               goTo('frameworks');
@@ -724,36 +796,63 @@ export const InitWizardScreen: React.FC<InitWizardScreenProps> = ({
       {step === 'apps-packages' && (
         <Box flexDirection="column" gap={1}>
           <SummaryTable
-            title="Workspace Applications & Packages"
+            title="Workspace Applications & Packages (Select Tech per Workspace)"
             columns={[
-              { key: 'type', header: 'Type', color: 'cyan' },
-              { key: 'entries', header: 'Paths', color: 'green' },
+              { key: 'workspace', header: 'Workspace', color: 'cyan' },
+              { key: 'role', header: 'Role', color: 'yellow' },
+              { key: 'tech', header: 'Tech', color: 'green' },
             ]}
             rows={[
-              { type: 'Apps', entries: apps.map((a) => `apps/${a.name}`).join(', ') || '(none)' },
-              {
-                type: 'Packages',
-                entries: packages.map((p) => `packages/${p.name}`).join(', ') || '(none)',
-              },
-              {
-                type: 'Auto UI Split',
-                entries: requiredUi.map((u) => `packages/${u}`).join(', ') || '(none)',
-              },
+              ...apps.map((a) => ({
+                workspace: `apps/${a.name}`,
+                role: a.kind ?? 'app',
+                tech: `${a.language} / ${a.framework}`,
+              })),
+              ...packages.map((p) => ({
+                workspace: `packages/${p.name}`,
+                role: p.kind ?? 'package',
+                tech: `${p.language} / ${p.framework}`,
+              })),
+              ...requiredUi.map((u) => ({
+                workspace: `packages/${u}`,
+                role: 'ui-split',
+                tech: 'typescript / shared-ui',
+              })),
             ]}
           />
           <Select
+            visibleOptionCount={6}
             options={[
-              { label: '➕ Add Application (apps/<name>)', value: 'add-app' },
-              { label: '📦 Add Package (packages/<name>)', value: 'add-pkg' },
               { label: '➡️  Continue to Architecture Selector', value: 'next' },
+              ...(apps.length + packages.length > 0
+                ? [{ label: '🛠️  Select Tech for an Existing App / Package', value: 'edit-ws' }]
+                : []),
+              { label: '➕ Add Application (apps/<name> + tech)', value: 'add-app' },
+              { label: '📦 Add Package (packages/<name> + tech)', value: 'add-pkg' },
+              ...(apps.length + packages.length > 0
+                ? [{ label: '🗑️  Remove an App / Package', value: 'remove-ws' }]
+                : []),
               { label: '⬅️  Back to Previous Step', value: 'back' },
             ]}
             onChange={(value) => {
               setDraftName('');
-              if (value === 'add-app') goTo('add-app-name');
-              else if (value === 'add-pkg') goTo('add-pkg-name');
-              else if (value === 'back') goBack();
-              else goTo('arch-pattern');
+              if (value === 'add-app') {
+                setDraftKind('backend');
+                setDraftLang(languages[0] ?? 'typescript');
+                goTo('add-app-name');
+              } else if (value === 'add-pkg') {
+                setDraftKind('library');
+                setDraftLang(languages[0] ?? 'typescript');
+                goTo('add-pkg-name');
+              } else if (value === 'edit-ws') {
+                goTo('edit-ws-select');
+              } else if (value === 'remove-ws') {
+                goTo('remove-ws-select');
+              } else if (value === 'back') {
+                goBack();
+              } else {
+                goTo('arch-pattern');
+              }
             }}
           />
         </Box>
@@ -775,19 +874,72 @@ export const InitWizardScreen: React.FC<InitWizardScreenProps> = ({
                   setInputError(formatZodError(res.error));
                   return;
                 }
-                setApps((prev) => [
-                  ...prev,
-                  {
-                    name: res.data,
-                    language: languages[0] ?? 'typescript',
-                    framework: frameworks[0] ?? 'nextjs',
-                  },
-                ]);
-                goBack();
+                setDraftName(res.data);
+                goTo('add-app-kind');
               }}
             />
           </Box>
           {inputError && <StatusMessage variant="error">{inputError}</StatusMessage>}
+        </Box>
+      )}
+
+      {step === 'add-app-kind' && (
+        <Box flexDirection="column">
+          <Text bold>Role / Skeleton for apps/{draftName}:</Text>
+          <Select
+            defaultValue={draftKind}
+            options={WORKSPACE_KINDS.filter((k) =>
+              ['backend', 'web', 'cli', 'mobile'].includes(k.id),
+            ).map((k) => ({ label: `${k.label} — ${k.description}`, value: k.id }))}
+            onChange={(value) => {
+              setDraftKind(value as WorkspaceKind);
+              goTo('add-app-lang');
+            }}
+          />
+        </Box>
+      )}
+
+      {step === 'add-app-lang' && (
+        <Box flexDirection="column">
+          <Text bold>Language for apps/{draftName}:</Text>
+          <Select
+            defaultValue={draftLang}
+            options={LANGUAGES.filter((l) => languages.includes(l.id)).map((l) => ({
+              label: `${l.label} — ${l.description}`,
+              value: l.id,
+            }))}
+            onChange={(value) => {
+              setDraftLang(value as Language);
+              goTo('add-app-fw');
+            }}
+          />
+        </Box>
+      )}
+
+      {step === 'add-app-fw' && (
+        <Box flexDirection="column">
+          <Text bold>
+            Framework / Tech for apps/{draftName} ({draftLang}):
+          </Text>
+          <Select
+            visibleOptionCount={6}
+            options={getFrameworksForWorkspace(draftLang, packageManager, draftKind).map((fw) => ({
+              label: `${fw.label} — ${fw.description}`,
+              value: fw.id,
+            }))}
+            onChange={(value) => {
+              setApps((prev) => [
+                ...prev,
+                {
+                  name: draftName,
+                  language: draftLang,
+                  framework: value as Framework,
+                  kind: draftKind,
+                },
+              ]);
+              setStep('apps-packages');
+            }}
+          />
         </Box>
       )}
 
@@ -807,19 +959,210 @@ export const InitWizardScreen: React.FC<InitWizardScreenProps> = ({
                   setInputError(formatZodError(res.error));
                   return;
                 }
-                setPackages((prev) => [
-                  ...prev,
-                  {
-                    name: res.data,
-                    language: languages[0] ?? 'typescript',
-                    framework: frameworks[0] ?? 'vitest',
-                  },
-                ]);
-                goBack();
+                setDraftName(res.data);
+                goTo('add-pkg-kind');
               }}
             />
           </Box>
           {inputError && <StatusMessage variant="error">{inputError}</StatusMessage>}
+        </Box>
+      )}
+
+      {step === 'add-pkg-kind' && (
+        <Box flexDirection="column">
+          <Text bold>Role / Skeleton for packages/{draftName}:</Text>
+          <Select
+            defaultValue={draftKind}
+            options={WORKSPACE_KINDS.filter((k) =>
+              ['contracts', 'library', 'cli'].includes(k.id),
+            ).map((k) => ({ label: `${k.label} — ${k.description}`, value: k.id }))}
+            onChange={(value) => {
+              setDraftKind(value as WorkspaceKind);
+              goTo('add-pkg-lang');
+            }}
+          />
+        </Box>
+      )}
+
+      {step === 'add-pkg-lang' && (
+        <Box flexDirection="column">
+          <Text bold>Language for packages/{draftName}:</Text>
+          <Select
+            defaultValue={draftLang}
+            options={LANGUAGES.filter((l) => languages.includes(l.id)).map((l) => ({
+              label: `${l.label} — ${l.description}`,
+              value: l.id,
+            }))}
+            onChange={(value) => {
+              setDraftLang(value as Language);
+              goTo('add-pkg-fw');
+            }}
+          />
+        </Box>
+      )}
+
+      {step === 'add-pkg-fw' && (
+        <Box flexDirection="column">
+          <Text bold>
+            Framework / Tech for packages/{draftName} ({draftLang}):
+          </Text>
+          <Select
+            visibleOptionCount={6}
+            options={getFrameworksForWorkspace(draftLang, packageManager, draftKind).map((fw) => ({
+              label: `${fw.label} — ${fw.description}`,
+              value: fw.id,
+            }))}
+            onChange={(value) => {
+              setPackages((prev) => [
+                ...prev,
+                {
+                  name: draftName,
+                  language: draftLang,
+                  framework: value as Framework,
+                  kind: draftKind,
+                },
+              ]);
+              setStep('apps-packages');
+            }}
+          />
+        </Box>
+      )}
+
+      {step === 'edit-ws-select' && (
+        <Box flexDirection="column">
+          <Text bold>Choose App or Package to Configure Tech:</Text>
+          <Select
+            visibleOptionCount={6}
+            options={[
+              ...apps.map((a, idx) => ({
+                label: `apps/${a.name} (${a.language} / ${a.framework})`,
+                value: `app:${idx}`,
+              })),
+              ...packages.map((p, idx) => ({
+                label: `packages/${p.name} (${p.language} / ${p.framework})`,
+                value: `package:${idx}`,
+              })),
+              { label: '⬅️  Cancel', value: 'cancel' },
+            ]}
+            onChange={(value) => {
+              if (value === 'cancel') {
+                setStep('apps-packages');
+                return;
+              }
+              const [bucket, idxStr] = value.split(':') as ['app' | 'package', string];
+              const index = Number(idxStr);
+              const target = bucket === 'app' ? apps[index] : packages[index];
+              if (!target) {
+                setStep('apps-packages');
+                return;
+              }
+              setEditingTarget({ bucket, index });
+              setDraftLang(target.language);
+              setDraftKind(target.kind ?? (bucket === 'app' ? 'backend' : 'library'));
+              goTo('edit-ws-lang');
+            }}
+          />
+        </Box>
+      )}
+
+      {step === 'edit-ws-lang' && editingTarget && (
+        <Box flexDirection="column">
+          <Text bold>
+            Select Language for{' '}
+            {editingTarget.bucket === 'app'
+              ? `apps/${apps[editingTarget.index]?.name ?? ''}`
+              : `packages/${packages[editingTarget.index]?.name ?? ''}`}
+            :
+          </Text>
+          <Select
+            defaultValue={draftLang}
+            options={LANGUAGES.filter((l) => languages.includes(l.id)).map((l) => ({
+              label: `${l.label} — ${l.description}`,
+              value: l.id,
+            }))}
+            onChange={(value) => {
+              setDraftLang(value as Language);
+              goTo('edit-ws-fw');
+            }}
+          />
+        </Box>
+      )}
+
+      {step === 'edit-ws-fw' && editingTarget && (
+        <Box flexDirection="column">
+          <Text bold>
+            Select Framework / Tech for{' '}
+            {editingTarget.bucket === 'app'
+              ? `apps/${apps[editingTarget.index]?.name ?? ''}`
+              : `packages/${packages[editingTarget.index]?.name ?? ''}`}{' '}
+            ({draftLang}):
+          </Text>
+          <Select
+            visibleOptionCount={6}
+            defaultValue={
+              editingTarget.bucket === 'app'
+                ? apps[editingTarget.index]?.framework
+                : packages[editingTarget.index]?.framework
+            }
+            options={getFrameworksForWorkspace(draftLang, packageManager, draftKind).map((fw) => ({
+              label: `${fw.label} — ${fw.description}`,
+              value: fw.id,
+            }))}
+            onChange={(value) => {
+              const fw = value as Framework;
+              if (editingTarget.bucket === 'app') {
+                setApps((prev) =>
+                  prev.map((item, i) =>
+                    i === editingTarget.index
+                      ? { ...item, language: draftLang, framework: fw }
+                      : item,
+                  ),
+                );
+              } else {
+                setPackages((prev) =>
+                  prev.map((item, i) =>
+                    i === editingTarget.index
+                      ? { ...item, language: draftLang, framework: fw }
+                      : item,
+                  ),
+                );
+              }
+              setEditingTarget(null);
+              setStep('apps-packages');
+            }}
+          />
+        </Box>
+      )}
+
+      {step === 'remove-ws-select' && (
+        <Box flexDirection="column">
+          <Text bold>Remove an App or Package:</Text>
+          <Select
+            visibleOptionCount={6}
+            options={[
+              ...apps.map((a, idx) => ({
+                label: `Remove apps/${a.name} (${a.language} / ${a.framework})`,
+                value: `app:${idx}`,
+              })),
+              ...packages.map((p, idx) => ({
+                label: `Remove packages/${p.name} (${p.language} / ${p.framework})`,
+                value: `package:${idx}`,
+              })),
+              { label: '⬅️  Cancel', value: 'cancel' },
+            ]}
+            onChange={(value) => {
+              if (value !== 'cancel') {
+                const [bucket, idxStr] = value.split(':') as ['app' | 'package', string];
+                const index = Number(idxStr);
+                if (bucket === 'app') {
+                  setApps((prev) => prev.filter((_, i) => i !== index));
+                } else {
+                  setPackages((prev) => prev.filter((_, i) => i !== index));
+                }
+              }
+              setStep('apps-packages');
+            }}
+          />
         </Box>
       )}
 
@@ -904,6 +1247,7 @@ export const InitWizardScreen: React.FC<InitWizardScreenProps> = ({
         <Box gap={1}>
           <Text bold>Enable test coverage threshold enforcement (CLI &amp; Web)?</Text>
           <ConfirmInput
+            defaultChoice={coverageEnabled ? 'confirm' : 'cancel'}
             onConfirm={() => {
               setCoverageEnabled(true);
               goTo('coverage-threshold');
@@ -1015,7 +1359,7 @@ export const InitWizardScreen: React.FC<InitWizardScreenProps> = ({
           />
           <Select
             options={[
-              { label: '✅ Confirm & Launch Planet Express Delivery!', value: 'confirm' },
+              { label: '✅ Confirm & Launch little.bootstrapper Delivery!', value: 'confirm' },
               { label: '⬅️  Go Back & Adjust Options', value: 'back' },
               { label: '↩️  Cancel & Return to Main Menu', value: 'cancel' },
             ]}
@@ -1063,8 +1407,8 @@ export const InitWizardScreen: React.FC<InitWizardScreenProps> = ({
             markdown={[
               `# Ready to Launch: ${configSnapshot.project.name}`,
               `- \`cd ${configSnapshot.project.name}\``,
-              `- Run \`${packageManager} install\` to install strictly pinned audited packages`,
-              '- Run `little-bootstrapper validate` to verify all patterns & security rules',
+              `- Run \`./scripts/pipeline.sh --all\` to install, format-check, lint (root ${rootLinter}), build, test & validate`,
+              `- Inspect \`docs/PIPELINE.md\` for workspace topology (Backend \`GET /health\`, \`packages/contracts\`, and Web Sample App)`,
               '- Open in Open Code, Antigravity, Claude, Codex, or Cursor — all rules & `mcp.json` are active!',
             ].join('\n')}
           />
@@ -1072,7 +1416,7 @@ export const InitWizardScreen: React.FC<InitWizardScreenProps> = ({
       )}
 
       <StatusFooter
-        context={step === 'done' ? 'DONE' : `INIT ${STEP_INDEX[step]}/21`}
+        context={step === 'done' ? 'DONE' : `INIT ${STEP_INDEX[step]}/${TOTAL_STEPS}`}
         hints={footerHints}
       />
     </Box>

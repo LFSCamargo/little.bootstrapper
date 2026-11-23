@@ -1,5 +1,9 @@
 export type PackageManager = 'yarn' | 'npm' | 'pnpm' | 'bun';
 
+export type RootLinter = 'eslint' | 'biome' | 'oxlint' | 'none';
+
+export type WorkspaceKind = 'backend' | 'web' | 'contracts' | 'library' | 'cli' | 'mobile';
+
 export type Language = 'typescript' | 'golang' | 'rust' | 'solidity';
 
 export type AIAgent = 'opencode' | 'antigravity' | 'claude' | 'codex' | 'cursor';
@@ -118,6 +122,7 @@ export interface WorkspaceEntry {
   name: string;
   language: Language;
   framework: Framework;
+  kind?: WorkspaceKind;
 }
 
 export interface ProjectInfo {

@@ -7,7 +7,9 @@ import {
   MARKETPLACE_RULES,
   PACKAGE_MANAGERS,
   PROJECT_DOMAINS,
+  ROOT_LINTERS,
   VERIFIED_MCPS,
+  WORKSPACE_KINDS,
 } from '../catalog/index.js';
 import type {
   AIAgent,
@@ -21,7 +23,9 @@ import type {
   McpServerId,
   PackageManager,
   ProjectDomain,
+  RootLinter,
   TestFileOrganization,
+  WorkspaceKind,
 } from '../../types/index.js';
 
 function enumFromList<T extends string>(items: readonly T[]) {
@@ -29,6 +33,10 @@ function enumFromList<T extends string>(items: readonly T[]) {
 }
 
 export const PackageManagerSchema = enumFromList<PackageManager>(PACKAGE_MANAGERS.map((p) => p.id));
+
+export const RootLinterSchema = enumFromList<RootLinter>(ROOT_LINTERS.map((l) => l.id));
+
+export const WorkspaceKindSchema = enumFromList<WorkspaceKind>(WORKSPACE_KINDS.map((k) => k.id));
 
 export const LanguageSchema = enumFromList<Language>(LANGUAGES.map((l) => l.id));
 
@@ -131,6 +139,7 @@ export const WorkspaceEntrySchema = z.object({
   name: WorkspaceNameSchema,
   language: LanguageSchema,
   framework: FrameworkSchema,
+  kind: WorkspaceKindSchema.optional(),
 });
 
 export const ArchitectureConfigSchema = z.object({
@@ -172,6 +181,8 @@ export const BootstrapConfigSchema = z.object({
     packageManager: PackageManagerSchema,
     monorepo: z.boolean(),
     useMakefiles: z.boolean(),
+    linter: RootLinterSchema.optional(),
+    prettier: z.boolean().optional(),
     frameworks: z.array(FrameworkSchema),
     tools: z.array(AdditionalToolSchema),
     agents: z.array(AIAgentSchema).min(1, 'Select at least one AI agent'),
@@ -196,6 +207,8 @@ export const InitCommandArgsSchema = z
     monorepo: z.boolean(),
     languages: z.array(LanguageSchema).min(1, 'At least one language is required'),
     packageManager: PackageManagerSchema,
+    linter: RootLinterSchema.optional(),
+    prettier: z.boolean().optional(),
     frameworks: z.array(FrameworkSchema),
     mcps: z.array(McpServerIdSchema),
     domains: z.array(ProjectDomainSchema).optional(),
