@@ -1,0 +1,25 @@
+{
+  "name": "@little-bootstrapper/ui-cli",
+  "sourceRoot": "packages/ui-cli/src",
+  "projectType": "library",
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "yarn workspace @little-bootstrapper/ui-cli build"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "yarn workspace @little-bootstrapper/ui-cli test"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "yarn workspace @little-bootstrapper/ui-cli typecheck"
+      }
+    }
+  }
+}
