@@ -1,7 +1,7 @@
 /**
  * Exact ASCII Art Illustrations from PROMPT.md
  *
- * Planet Express Ship: https://asciiart.website/art/4158 (by Sebastian Stöcker / SSt)
+ * Futurama delivery ship: https://asciiart.website/art/4158 (by Sebastian Stöcker / SSt)
  * Bender Mascot: Silver Saks
  */
 export const PLANET_EXPRESS_SHIP_ASCII = [
@@ -47,7 +47,7 @@ export const FUTURAMA_QUOTES = [
   'Bite my shiny metal scaffold!',
   'Shut up and take my dependencies! (All pinned and audited, of course.)',
   'I am Bender, please insert girder — or select an architecture pattern.',
-  'Planet Express: Delivering clean architecture across all 5 AI agents since 3000.',
+  'little.bootstrapper: Delivering clean architecture across all 5 AI agents since 3000.',
 ] as const;
 
 export function getRandomQuote(): string {

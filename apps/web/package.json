@@ -2,7 +2,7 @@
   "name": "@little-bootstrapper/web",
   "version": "1.0.0",
   "private": true,
-  "description": "Planet Express Liquid Glassy Landing & Docs Page (Next.js + ShadCN + Aceternity UI)",
+  "description": "little.bootstrapper Liquid Glassy Landing & Docs Page (Next.js + ShadCN + Aceternity UI)",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

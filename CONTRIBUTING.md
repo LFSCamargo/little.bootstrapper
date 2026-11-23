@@ -1,6 +1,6 @@
 # Contributing to little.bootstrapper
 
-Good news, everyone! We welcome contributions to the Planet Express crew.
+Good news, everyone! We welcome contributions to the little.bootstrapper crew.
 
 ## Ground Rules
 

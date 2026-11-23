@@ -1,6 +1,6 @@
 # Rule: project-architecture
 
-> Planet Express Universal AI Rule (Core) — applies across Open Code, Antigravity, Claude, Codex, and Cursor.
+> little.bootstrapper Universal AI Rule (Core) — applies across Open Code, Antigravity, Claude, Codex, and Cursor.
 
 - Architecture Pattern: `modular`
 - Folder Organization: `module-based`

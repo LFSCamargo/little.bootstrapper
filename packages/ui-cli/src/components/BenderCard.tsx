@@ -17,7 +17,7 @@ export const BenderCard: React.FC<BenderCardProps> = ({
   <Box flexDirection="column" borderStyle="round" borderColor="green" paddingX={2} paddingY={1}>
     <Text color="greenBright">{BENDER_MASCOT_ASCII}</Text>
     <Box marginTop={1} flexDirection="column" gap={1}>
-      <Alert variant={variant} title="Planet Express Delivery Complete">
+      <Alert variant={variant} title="little.bootstrapper Delivery Complete">
         {message}
       </Alert>
       {detail && <StatusMessage variant="info">{detail}</StatusMessage>}

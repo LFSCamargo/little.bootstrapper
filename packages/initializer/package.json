@@ -1,7 +1,7 @@
 {
   "name": "@little-bootstrapper/initializer",
   "version": "1.0.0",
-  "description": "Planet Express Universal AI Agent Project Initializer CLI",
+  "description": "little.bootstrapper Universal AI Agent Project Initializer CLI",
   "type": "module",
   "main": "dist/cli.js",
   "types": "dist/cli.d.ts",

@@ -21,7 +21,7 @@ export const MainMenuScreen: React.FC<MainMenuScreenProps> = ({ onSelectMode }) 
       <Box gap={1} alignItems="center">
         <Badge color="cyan">MISSION CONTROL</Badge>
         <Text bold color="yellow">
-          Select a Planet Express Delivery Mission:
+          Select a little.bootstrapper Delivery Mission:
         </Text>
       </Box>
       <Select

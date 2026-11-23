@@ -11,11 +11,11 @@ const DEFAULT_STEPS = [
   'Fueling dark-matter engines...',
   'Pinning audited package versions...',
   'Syncing universal AI agent rules & skills...',
-  'Assembling Planet Express cargo...',
+  'Assembling little.bootstrapper cargo...',
 ];
 
 export const DeliveryLoader: React.FC<DeliveryLoaderProps> = ({
-  label = 'Delivering Planet Express package...',
+  label = 'Delivering little.bootstrapper package...',
   steps = DEFAULT_STEPS,
 }) => {
   const [tick, setTick] = useState(0);

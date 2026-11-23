@@ -1,6 +1,6 @@
 # Rule: ink-anti-patterns
 
-> Planet Express Universal AI Rule (Framework) — applies across Open Code, Antigravity, Claude, Codex, and Cursor.
+> little.bootstrapper Universal AI Rule (Framework) — applies across Open Code, Antigravity, Claude, Codex, and Cursor.
 
 - Use `@inkjs/ui` (`Select`, `Spinner`, `ProgressBar`, `Alert`, `Badge`, `StatusMessage`, `ConfirmInput`, `ThemeProvider`, `extendTheme`) inside `packages/ui-cli` instead of legacy Ink prompt wrappers.
 - Guard async `useEffect` calls with a `cancelled` cleanup flag, `clearInterval()` on animations, and `.catch()` error handling.

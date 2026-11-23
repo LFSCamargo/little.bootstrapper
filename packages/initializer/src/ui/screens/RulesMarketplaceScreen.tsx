@@ -85,7 +85,7 @@ export const RulesMarketplaceScreen: React.FC<RulesMarketplaceScreenProps> = ({
   if (!installedRules) {
     return (
       <Box flexDirection="column">
-        <Spinner label="Loading Planet Express Rules Marketplace..." type="dots" />
+        <Spinner label="Loading little.bootstrapper Rules Marketplace..." type="dots" />
         <StatusFooter context="RULES" hints={[{ key: 'Ctrl+C', action: 'Cancel' }]} />
       </Box>
     );

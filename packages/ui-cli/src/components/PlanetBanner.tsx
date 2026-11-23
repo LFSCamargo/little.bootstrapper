@@ -13,7 +13,7 @@ export interface PlanetBannerProps {
 const THRUSTER_FRAMES = ['✦ ═══', '✧ ═══', '★ ═══', '✧ ═══'] as const;
 
 export const PlanetBanner: React.FC<PlanetBannerProps> = ({
-  title = 'PLANET EXPRESS — Universal AI Agent Initializer & Rules Marketplace',
+  title = 'little.bootstrapper — Universal AI Agent Initializer & Rules Marketplace',
   subtitle = FUTURAMA_QUOTES[0],
   version = '1.0.0',
   animated = true,

@@ -1,7 +1,7 @@
 {
   "name": "@little-bootstrapper/ui-web",
   "version": "1.0.0",
-  "description": "Shared ShadCN + Aceternity UI Liquid Glassy Web Components (Planet Express Design System)",
+  "description": "Shared ShadCN + Aceternity UI Liquid Glassy Web Components (little.bootstrapper Design System)",
   "type": "module",
   "main": "src/index.ts",
   "types": "src/index.ts",

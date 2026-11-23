@@ -92,7 +92,7 @@ export const McpCatalogScreen: React.FC<McpCatalogScreenProps> = ({
   if (!existingMcps) {
     return (
       <Box flexDirection="column">
-        <Spinner label="Loading Planet Express Verified Safe MCP Marketplace..." type="dots" />
+        <Spinner label="Loading little.bootstrapper Verified Safe MCP Marketplace..." type="dots" />
         <StatusFooter context="MCPS" hints={[{ key: 'Ctrl+C', action: 'Cancel' }]} />
       </Box>
     );

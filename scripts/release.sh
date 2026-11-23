@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Automated Semver Bump, Changelog Updater & Git Tag Creator for Planet Express CLI
+# Automated Semver Bump, Changelog Updater & Git Tag Creator for little.bootstrapper CLI
 # Usage: bash scripts/release.sh <patch|minor|major|X.Y.Z> [--dry-run]
 
 BUMP="${1:-}"
@@ -17,7 +17,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "${REPO_ROOT}"
 
 # 1. Run full pattern validation before cutting a release
-echo "🛡️  Running Planet Express Pattern Validation Gate..."
+echo "🛡️  Running little.bootstrapper Pattern Validation Gate..."
 node "${REPO_ROOT}/packages/initializer/dist/cli.js" validate --dir "${REPO_ROOT}"
 
 # 2. Compute next semver version

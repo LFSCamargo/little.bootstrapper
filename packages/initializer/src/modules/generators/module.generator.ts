@@ -73,7 +73,7 @@ export async function generateModule(
 
   const testContent =
     lang === 'typescript'
-      ? `import { describe, it, expect } from 'vitest';\n\ndescribe('${moduleName}', () => {\n  it('delivers the Planet Express package', () => {\n    expect(true).toBe(true);\n  });\n});\n`
+      ? `import { describe, it, expect } from 'vitest';\n\ndescribe('${moduleName}', () => {\n  it('delivers the little.bootstrapper package', () => {\n    expect(true).toBe(true);\n  });\n});\n`
       : `// Test stub for ${moduleName}\n`;
 
   await fs.writeFile(testPath, testContent, 'utf-8');

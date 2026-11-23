@@ -74,7 +74,7 @@ export const UpdateWizardScreen: React.FC<UpdateWizardScreenProps> = ({
     return (
       <Box flexDirection="column">
         <Spinner
-          label="Auditing package.json files against Planet Express audited registry..."
+          label="Auditing package.json files against little.bootstrapper audited registry..."
           type="dots"
         />
         <StatusFooter context="UPDATE" hints={[{ key: 'Ctrl+C', action: 'Cancel' }]} />

@@ -1,7 +1,7 @@
 {
   "name": "@little-bootstrapper/ui-cli",
   "version": "1.0.0",
-  "description": "Shared React Ink + @inkjs/ui Animated CLI Components (Planet Express Terminal Design System)",
+  "description": "Shared React Ink + @inkjs/ui Animated CLI Components (little.bootstrapper Terminal Design System)",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

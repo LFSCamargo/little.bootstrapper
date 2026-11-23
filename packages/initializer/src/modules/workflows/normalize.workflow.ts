@@ -159,7 +159,7 @@ export async function applyNormalization(
     version: '1.0.0',
     project: {
       name: path.basename(targetDir),
-      description: 'Normalized with Planet Express little.bootstrapper',
+      description: 'Normalized with little.bootstrapper',
       author: 'crew',
       codeowners: false,
     },

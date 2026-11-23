@@ -16,7 +16,7 @@ export interface StatusFooterProps {
 export const StatusFooter: React.FC<StatusFooterProps> = ({
   context,
   hints,
-  rightText = 'Planet Express CLI',
+  rightText = 'little.bootstrapper CLI',
 }) => (
   <Box
     marginTop={1}

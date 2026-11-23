@@ -8,9 +8,7 @@ export function runHelpCommand(parsed: ParsedArgs): { handled: boolean; exitCode
 
   if (command === '--help' || command === '-h') {
     console.log(PLANET_EXPRESS_SHIP_ASCII);
-    console.log(
-      `\nPlanet Express Universal AI Agent Initializer (little.bootstrapper v${CLI_VERSION})\n`,
-    );
+    console.log(`\nlittle.bootstrapper v${CLI_VERSION} — Project setup library & CLI\n`);
     console.log('Usage: little-bootstrapper [command] [options]\n');
     console.log('Commands:');
     console.log(

@@ -11,7 +11,9 @@ export async function runValidateCommand(
     return { handled: true, exitCode: report.passed ? 0 : 1 };
   }
 
-  console.log(`\n🛡️  Planet Express Pattern Validation Report (${report.totalChecks} checks)\n`);
+  console.log(
+    `\n🛡️  little.bootstrapper Pattern Validation Report (${report.totalChecks} checks)\n`,
+  );
   for (const check of report.checks) {
     const icon = check.passed ? '✔' : '✖';
     console.log(`${icon} [${check.id}] ${check.name}`);

@@ -12,7 +12,7 @@ if [[ "${1:-}" == "--uninstall" ]]; then
   exit 0
 fi
 
-echo "🚀 Building Planet Express CLI (@little-bootstrapper/ui-cli & @little-bootstrapper/initializer)..."
+echo "🚀 Building little.bootstrapper CLI (@little-bootstrapper/ui-cli & @little-bootstrapper/initializer)..."
 "${REPO_ROOT}/node_modules/.bin/tsc" -p "${REPO_ROOT}/packages/ui-cli/tsconfig.json"
 "${REPO_ROOT}/node_modules/.bin/tsc" -p "${REPO_ROOT}/packages/initializer/tsconfig.json"
 

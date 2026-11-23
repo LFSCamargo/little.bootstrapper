@@ -27,7 +27,9 @@ export async function generateMcpConfig(
   for (const id of mcpIds) {
     const entry = getVerifiedMcpById(id);
     if (!entry) {
-      throw new Error(`MCP server "${id}" is not in the Planet Express verified safe MCP catalog.`);
+      throw new Error(
+        `MCP server "${id}" is not in the little.bootstrapper verified safe MCP catalog.`,
+      );
     }
     mcpServers[entry.id] = entry.config;
     installedMcps.push(entry.id);

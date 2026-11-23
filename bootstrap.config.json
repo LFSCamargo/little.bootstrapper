@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "project": {
     "name": "little-bootstrapper",
-    "description": "Planet Express Universal AI Agent Project Initializer",
+    "description": "little.bootstrapper Universal AI Agent Project Initializer",
     "author": "lfscamargo",
     "codeowners": true
   },
