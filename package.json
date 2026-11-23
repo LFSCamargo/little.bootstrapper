@@ -1,0 +1,42 @@
+{
+  "name": "little-bootstrapper",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Planet Express Universal AI Agent Project Initializer — Good news, everyone!",
+  "packageManager": "yarn@4.19.0",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "build": "nx run-many -t build",
+    "test": "nx run-many -t test",
+    "test:unit": "yarn workspace @little-bootstrapper/ui-cli test && yarn workspace @little-bootstrapper/ui-web test && yarn workspace @little-bootstrapper/initializer test:unit && yarn workspace @little-bootstrapper/web test:unit",
+    "test:coverage": "yarn workspace @little-bootstrapper/ui-cli test:coverage && yarn workspace @little-bootstrapper/ui-web test:coverage && yarn workspace @little-bootstrapper/initializer test:coverage && yarn workspace @little-bootstrapper/web test:coverage",
+    "test:integration": "yarn workspace @little-bootstrapper/initializer test:integration",
+    "test:e2e": "yarn workspace @little-bootstrapper/initializer test:e2e && yarn workspace @little-bootstrapper/web test:e2e",
+    "lint": "nx run-many -t lint",
+    "typecheck": "nx run-many -t typecheck",
+    "dev:web": "yarn workspace @little-bootstrapper/web dev",
+    "cli": "yarn workspace @little-bootstrapper/initializer start",
+    "validate": "node packages/initializer/dist/cli.js validate",
+    "release": "bash scripts/release.sh",
+    "install:local": "bash scripts/install-local.sh",
+    "uninstall:local": "bash scripts/install-local.sh --uninstall",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "19.8.1",
+    "@commitlint/config-conventional": "19.8.1",
+    "@types/node": "22.14.0",
+    "husky": "9.1.7",
+    "nx": "20.8.2",
+    "prettier": "3.5.3",
+    "typescript": "5.8.3"
+  }
+}
