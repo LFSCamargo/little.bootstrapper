@@ -1,0 +1,89 @@
+name: PR Validation & Pattern Gate
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: pr-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  commitlint:
+    name: Conventional Commits Check
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Yarn v4 & Dependencies
+        run: |
+          corepack enable
+          yarn install --immutable
+      - name: Validate PR Commit Messages
+        run: yarn commitlint --from "${{ github.event.pull_request.base.sha }}" --to "${{ github.event.pull_request.head.sha }}" --verbose
+
+  security-scan:
+    name: Security Scan (GitLeaks + OpenGrep)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: GitLeaks Secret Scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          args: '--config=.gitleaks.toml'
+      - name: Semgrep / OpenGrep Pattern Scan
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: .opengrep.yml
+
+  patterns-build-and-tests:
+    name: Pattern Gate, Typecheck, Build & Full Test Pyramid
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Yarn v4 & Dependencies
+        run: |
+          corepack enable
+          yarn install --immutable
+      - name: Formatting Check (Prettier)
+        run: yarn format:check
+      - name: Typecheck & Build All Packages
+        run: |
+          ./node_modules/.bin/tsc -p packages/ui-cli/tsconfig.json
+          ./node_modules/.bin/tsc --noEmit -p packages/ui-web/tsconfig.json
+          ./node_modules/.bin/tsc -p packages/initializer/tsconfig.json
+          ./node_modules/.bin/tsc --noEmit -p apps/web/tsconfig.json
+      - name: Planet Express Pattern Validation Gate (All 8 Rulesets)
+        run: node packages/initializer/dist/cli.js validate
+      - name: Unit, Integration & 75% Coverage Gate (CLI & Web)
+        run: |
+          ./node_modules/.bin/vitest run --root packages/ui-cli --coverage
+          ./node_modules/.bin/vitest run --root packages/ui-web --coverage
+          ./node_modules/.bin/vitest run --root packages/initializer src/ --coverage
+          ./node_modules/.bin/vitest run --root apps/web --coverage
+      - name: CLI E2E Tests (packages/initializer/tests/e2e/)
+        run: ./node_modules/.bin/vitest run --root packages/initializer tests/e2e
+      - name: Build Next.js Web App
+        run: ./node_modules/.bin/next build apps/web
+      - name: Install Playwright Chromium & Run Web E2E Tests
+        run: |
+          ./node_modules/.bin/playwright install chromium --with-deps
+          cd apps/web && ../../node_modules/.bin/playwright test

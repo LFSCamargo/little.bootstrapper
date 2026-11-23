@@ -1,0 +1,81 @@
+name: Automated Tag Release & Publish
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to publish (e.g. v1.0.0)'
+        required: true
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  verify-and-release:
+    name: Verify, Tag Release & Publish Packages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+      - name: Install Yarn v4 & Dependencies
+        run: |
+          corepack enable
+          yarn install --immutable
+      - name: Build All Packages
+        run: |
+          ./node_modules/.bin/tsc -p packages/ui-cli/tsconfig.json
+          ./node_modules/.bin/tsc --noEmit -p packages/ui-web/tsconfig.json
+          ./node_modules/.bin/tsc -p packages/initializer/tsconfig.json
+          ./node_modules/.bin/tsc --noEmit -p apps/web/tsconfig.json
+      - name: Run Planet Express Pattern Gate
+        run: node packages/initializer/dist/cli.js validate
+      - name: Run Full Unit, Integration & CLI E2E Suites
+        run: |
+          ./node_modules/.bin/vitest run --root packages/ui-cli
+          ./node_modules/.bin/vitest run --root packages/ui-web
+          ./node_modules/.bin/vitest run --root packages/initializer
+      - name: Verify Tag Matches package.json Version
+        run: |
+          TAG_NAME="${{ github.event.inputs.tag || github.ref_name }}"
+          PKG_VER="v$(node -p "require('./packages/initializer/package.json').version")"
+          echo "Tag: ${TAG_NAME} | Package Version: ${PKG_VER}"
+          if [[ "${TAG_NAME}" != "${PKG_VER}" ]]; then
+            echo "Error: Tag ${TAG_NAME} does not match packages/initializer/package.json (${PKG_VER})" >&2
+            exit 1
+          fi
+      - name: Extract Release Notes from CHANGELOG.md
+        id: changelog
+        run: |
+          TAG_NAME="${{ github.event.inputs.tag || github.ref_name }}"
+          VER="${TAG_NAME#v}"
+          node -e "
+            const fs = require('fs');
+            const md = fs.readFileSync('CHANGELOG.md', 'utf8');
+            const escaped = '${VER}'.replace(/\\./g, '\\\\.');
+            const m = md.match(new RegExp('## \\\\[' + escaped + '\\\\][^\\n]*\\n([\\s\\S]*?)(?=\\n## \\\\[|$)'));
+            const notes = m ? m[1].trim() : 'Release ${TAG_NAME}';
+            fs.writeFileSync('/tmp/release-notes.md', notes + '\n');
+          "
+      - name: Publish @little-bootstrapper/ui-cli & @little-bootstrapper/initializer to npm
+        if: ${{ secrets.NPM_TOKEN != '' }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          npm publish packages/ui-cli --access public --provenance
+          npm publish packages/initializer --access public --provenance
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          name: 'Planet Express ${{ github.event.inputs.tag || github.ref_name }}'
+          body_path: /tmp/release-notes.md
+          generate_release_notes: true

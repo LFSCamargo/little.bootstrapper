@@ -1,0 +1,11 @@
+title = "Planet Express GitLeaks Configuration"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Allow example env placeholders and test fixtures"
+paths = [
+  '''\.env\.example$''',
+  '''\.test\.ts$''',
+]

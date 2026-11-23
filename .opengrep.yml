@@ -1,0 +1,21 @@
+# OpenGrep / Semgrep Security & Anti-Pattern Rules for little.bootstrapper
+rules:
+  - id: planet-express-no-eval
+    patterns:
+      - pattern: eval(...)
+    message: 'Avoid eval() — security risk (see .ai/rules/security.md)'
+    languages: [typescript, javascript]
+    severity: ERROR
+
+  - id: planet-express-no-hardcoded-secret
+    pattern-regex: "(?i)(api_key|secret_key|password|token)\\s*[:=]\\s*['\"][A-Za-z0-9_\\-]{16,}['\"]"
+    message: 'Potential hardcoded secret detected. Use .env instead.'
+    languages: [typescript, javascript]
+    severity: ERROR
+
+  - id: planet-express-no-child-process-shell-interpolation
+    patterns:
+      - pattern: exec(`...${$VAR}...`)
+    message: 'Avoid shell interpolation in exec(); use execFile() with argument arrays.'
+    languages: [typescript, javascript]
+    severity: WARNING
