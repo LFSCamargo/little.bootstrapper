@@ -1,16 +1,53 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=DM+Serif+Display:ital@0;1&family=IBM+Plex+Mono:wght@400;500&display=swap');
 @import 'tailwindcss';
+
+/* Scan the shared ShadCN + Aceternity package so its utility classes are generated. */
+@source '../../../../packages/ui-web/src';
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+@theme {
+  --font-sans: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-serif: 'DM Serif Display', Georgia, serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  /* Aceternity InfiniteMovingCards marquee */
+  --animate-scroll: scroll var(--animation-duration, 40s) var(--animation-direction, forwards)
+    linear infinite;
+
+  @keyframes scroll {
+    to {
+      transform: translate(calc(-50% - 0.5rem));
+    }
+  }
+}
+
 @layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
   body {
-    @apply bg-slate-50 text-slate-900 antialiased transition-colors duration-300 dark:bg-[#040914] dark:text-slate-100;
+    font-family: var(--font-sans);
+    font-synthesis: none;
+    @apply overflow-x-clip bg-white text-zinc-950 antialiased transition-colors duration-300 dark:bg-[#09090b] dark:text-zinc-100;
+  }
+
+  [id] {
+    scroll-margin-top: 12rem;
+  }
+
+  @media (min-width: 1024px) {
+    [id] {
+      scroll-margin-top: 8rem;
+    }
   }
 }
 
 .liquid-glass-bg {
-  background-image:
-    radial-gradient(circle at 15% 20%, rgba(45, 212, 191, 0.22), transparent 40%),
-    radial-gradient(circle at 85% 15%, rgba(132, 204, 22, 0.16), transparent 35%),
-    radial-gradient(circle at 50% 85%, rgba(56, 189, 248, 0.18), transparent 45%);
+  background-image: radial-gradient(
+    ellipse 70% 35% at 50% 0%,
+    rgba(45, 212, 191, 0.08),
+    transparent 70%
+  );
 }

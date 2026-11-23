@@ -1,4 +1,8 @@
-# 🚀 little.bootstrapper — Planet Express Universal AI Agent Initializer
+<p align="center">
+  <img src="./apps/web/public/images/logo.png" alt="little.bootstrapper logo" width="160" />
+</p>
+
+# 🚀 little.bootstrapper — A library for better project starts
 
 ````````````text
                      `. ___
@@ -34,11 +38,11 @@
   - `mcps` — **Verified Safe MCP Marketplace** (`26` audited MCPs including `nx`, `nextjs-devtools`, `shadcn`, `playwright`, `tailwind`, `magic-ui`, `eslint`, `drizzle`, `mongodb`, `postgres`, `stripe`, `tauri`, `nuxt`, `context7`, `ai-memory`) with `--recommend` stack matching, `/` live search, and `mcp.json` + `.env.example` generation.
   - `normalize` — Detects existing tools/agents/rules/MCPs/UI packages in any repo, lets you pick the normalizing AI agent, and syncs missing tools, skills, MCPs & security configs (`.opengrep.yml`, `.gitleaks.toml`).
 - **AI Anti-Doc-Sprawl Policy**: See [docs/AI-PATTERNS.md](./docs/AI-PATTERNS.md) for how we keep active AI context clean and prevent documentation bloat.
-  - `update` — Audits all `package.json` files against the Planet Express audited versions registry, flags CVEs & unpinned ranges (`^`/`~`), and pins/updates packages safely.
+  - `update` — Audits all `package.json` files against the little.bootstrapper audited versions registry, flags CVEs & unpinned ranges (`^`/`~`), and pins/updates packages safely.
   - `validate` — **PR Pattern Validation Gate** (also wired into `.github/workflows/pr-validation.yml`) enforcing pinned deps, universal AI rules, MCP security, NX boundaries, test placement, anti-doc-sprawl, Ink/Next.js anti-patterns, and security configs.
   - `generate <name>` — Generates new modules adhering to your persisted `bootstrap.config.json` conventions.
 - **Changelog & Automated Tag Releases**: Tracked in [CHANGELOG.md](./CHANGELOG.md) & [packages/initializer/CHANGELOG.md](./packages/initializer/CHANGELOG.md), automated via `yarn release <patch|minor|major>` ([scripts/release.sh](./scripts/release.sh)) and `.github/workflows/release.yml`.
-- **Liquid Glassy Landing & Docs Page**: Built with Next.js (`15.5.29`), TypeScript, Tailwind CSS, **ShadCN** + **Aceternity UI** (Pro keys via `.env`) inside `packages/ui-web`, with Dark/Light mode and Futurama ASCII references.
+- **Liquid Glassy Landing & Docs Page**: Built with Next.js (`15.5.29`), TypeScript, Tailwind CSS, **ShadCN** + **Aceternity UI** (Pro keys via `.env`) inside `packages/ui-web`, with Dark/Light mode and Futurama ASCII references. Typography matches nvim.setup: DM Sans body text, DM Serif Display italic accents, and IBM Plex Mono code; hero tracking is -0.06em, serif accents -0.05em, and section titles -0.04em. little.bootstrapper is the product; Fry and Bender references are playful asides, not endorsements. The hero background extends behind the floating navbar. Docs provide spaced reference cards and a sticky section navigator (a horizontal strip on mobile); the shared footer links to documentation and landing sections.
 - **Full Test Pyramid**:
   - **Unitary Tests**: Inside `src/**/__tests__/*.unit.test.ts` (close to implementation)
   - **Integration Tests**: Inside `src/**/__tests__/*.integration.test.ts` (close to implementation)
@@ -60,7 +64,7 @@ yarn test:unit
 yarn test:integration
 yarn test:e2e
 
-# Launch the Planet Express React Ink CLI
+# Launch the little.bootstrapper React Ink CLI
 yarn cli
 
 # Install locally into ~/.local/bin (installs `little-bootstrapper` & `planet-express`)
