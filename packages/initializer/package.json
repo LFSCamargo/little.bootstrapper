@@ -1,0 +1,41 @@
+{
+  "name": "@little-bootstrapper/initializer",
+  "version": "1.0.0",
+  "description": "Planet Express Universal AI Agent Project Initializer CLI",
+  "type": "module",
+  "main": "dist/cli.js",
+  "types": "dist/cli.d.ts",
+  "bin": {
+    "little-bootstrapper": "dist/cli.js",
+    "planet-express": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "tsx src/cli.tsx",
+    "test": "vitest run",
+    "test:unit": "vitest run src/**/__tests__/*.unit.test.ts",
+    "test:integration": "vitest run src/**/__tests__/*.integration.test.ts",
+    "test:coverage": "vitest run src/ --coverage",
+    "test:e2e": "vitest run tests/e2e",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@inkjs/ui": "2.0.0",
+    "@little-bootstrapper/ui-cli": "workspace:*",
+    "chalk": "5.4.1",
+    "ink": "5.1.0",
+    "ink-text-input": "6.0.0",
+    "react": "18.3.1",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "22.14.0",
+    "@types/react": "18.3.18",
+    "@vitest/coverage-v8": "3.1.1",
+    "tsx": "4.19.3",
+    "typescript": "5.8.3",
+    "vitest": "3.1.1"
+  }
+}
