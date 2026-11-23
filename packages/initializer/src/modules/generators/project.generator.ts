@@ -5,6 +5,7 @@ import { getPinnedVersion } from '../catalog/index.js';
 import { generateUniversalAIEcosystem } from './ai-ecosystem.generator.js';
 import { generateMcpConfig } from './mcp.generator.js';
 import { generateModule } from './module.generator.js';
+import { hasNativeWorkspaces, scaffoldNativeMakefiles } from './makefile.generator.js';
 import {
   isPrettierEnabled,
   resolveRootLinter,
@@ -347,6 +348,13 @@ export async function generateProject(
   targetDir: string,
   config: BootstrapConfig,
 ): Promise<GenerationResult> {
+  config = {
+    ...config,
+    stack: {
+      ...config.stack,
+      useMakefiles: hasNativeWorkspaces(config) || config.stack.useMakefiles,
+    },
+  };
   const filesCreated: string[] = [];
   await fs.mkdir(targetDir, { recursive: true });
 
@@ -578,29 +586,6 @@ export async function generateProject(
     filesCreated.push('.env.example');
   }
 
-  // 5. Makefile for non-JS projects
-  const hasNonJs = config.stack.languages.some((l) => l !== 'typescript');
-  if (config.stack.useMakefiles && hasNonJs) {
-    const makeLines = [
-      '# little.bootstrapper Polyglot Makefile',
-      '.PHONY: build test lint',
-      '',
-      'build:',
-      config.stack.languages.includes('golang') ? '\tgo build ./...' : '',
-      config.stack.languages.includes('rust') ? '\tcargo build' : '',
-      config.stack.languages.includes('solidity') ? '\tforge build' : '',
-      '',
-      'test:',
-      config.stack.languages.includes('golang') ? '\tgo test ./...' : '',
-      config.stack.languages.includes('rust') ? '\tcargo test' : '',
-      config.stack.languages.includes('solidity') ? '\tforge test' : '',
-      '',
-    ].filter((l) => l !== '');
-
-    await fs.writeFile(path.join(targetDir, 'Makefile'), `${makeLines.join('\n')}\n`, 'utf-8');
-    filesCreated.push('Makefile');
-  }
-
   // 6. Mandatory Separated UI Packages (ui-cli, ui-web, ui-mobile)
   const uiPackagesCreated = resolveRequiredUiPackages(config);
   for (const uiKind of uiPackagesCreated) {
@@ -626,6 +611,8 @@ export async function generateProject(
     const appFiles = await scaffoldWorkspaceApp(targetDir, app, config, hasContracts, hasUiWeb);
     filesCreated.push(...appFiles);
   }
+
+  filesCreated.push(...(await scaffoldNativeMakefiles(targetDir, config)));
 
   // 7b. External Bootstrap & Delivery Pipeline + Architecture Documentation
   const pipelineFiles = await scaffoldExternalPipeline(targetDir, config, uiPackagesCreated);
@@ -702,6 +689,8 @@ Run the standalone delivery pipeline outside the CLI:
 \`\`\`
 
 See [docs/PIPELINE.md](./docs/PIPELINE.md) for full pipeline stages, root-only linting, and workspace verification.
+
+${hasNativeWorkspaces(config) ? '## Native workspace commands\n\nEvery native workspace has a Makefile with build, start, dev, and test targets. Bare make runs tests. From the root, make build / make test aggregate native workspaces, make start runs executables or local contract nodes, and make dev runs development commands in parallel. Use make <command>-apps-<name> or make <command>-packages-<name> to target one workspace. Libraries have no runnable start target; their dev target runs tests. JavaScript workspaces retain package-manager commands.\n' : ''}
 
 ## Stack
 

@@ -44,103 +44,111 @@ async function waitForOutput(getOutput: () => string, needle: string, timeoutMs 
 }
 
 describe('InitWizardScreen interactive flow (regression)', () => {
-  it('proceeds past package-manager, monorepo, and all default Select steps when pressing Enter', async () => {
-    const { stdout, stdin, getOutput } = createInteractiveStreams();
+  it.each([false, true])(
+    'proceeds through the wizard without an optional Makefile prompt (native language: %s)',
+    async (native) => {
+      const { stdout, stdin, getOutput } = createInteractiveStreams();
 
-    const instance = render(
-      React.createElement(
-        PlanetThemeProvider,
-        null,
-        React.createElement(InitWizardScreen, {
-          cwd: '/tmp',
-          onBackToMenu: () => undefined,
-          onCompleted: () => undefined,
-        }),
-      ),
-      {
-        stdout: stdout as unknown as NodeJS.WriteStream,
-        stdin: stdin as unknown as NodeJS.ReadStream,
-        patchConsole: false,
-      },
-    );
+      const instance = render(
+        React.createElement(
+          PlanetThemeProvider,
+          null,
+          React.createElement(InitWizardScreen, {
+            cwd: '/tmp',
+            onBackToMenu: () => undefined,
+            onCompleted: () => undefined,
+          }),
+        ),
+        {
+          stdout: stdout as unknown as NodeJS.WriteStream,
+          stdin: stdin as unknown as NodeJS.ReadStream,
+          patchConsole: false,
+        },
+      );
 
-    const press = async (key: string) => {
-      stdin.write(key);
-      await tick(20);
-    };
+      const press = async (key: string) => {
+        stdin.write(key);
+        await tick(20);
+      };
 
-    try {
-      // 1. repo-name -> 2. description -> 3. author -> 4. codeowners -> 5. languages
-      await waitForOutput(getOutput, 'Repo Name (no spaces):');
-      await press('\r');
-      await waitForOutput(getOutput, 'Description:');
-      await press('\r');
-      await waitForOutput(getOutput, 'GitHub Author Handle:');
-      await press('\r');
-      await waitForOutput(getOutput, 'Setup CODEOWNERS?');
-      await press('\r');
-      await waitForOutput(getOutput, 'Select Languages:');
-      await press('\r');
+      try {
+        // 1. repo-name -> 2. description -> 3. author -> 4. codeowners -> 5. languages
+        await waitForOutput(getOutput, 'Repo Name (no spaces):');
+        await press('\r');
+        await waitForOutput(getOutput, 'Description:');
+        await press('\r');
+        await waitForOutput(getOutput, 'GitHub Author Handle:');
+        await press('\r');
+        await waitForOutput(getOutput, 'Setup CODEOWNERS?');
+        await press('\r');
+        await waitForOutput(getOutput, 'Select Languages:');
+        if (native) {
+          await press('\u001b[B');
+          await press(' ');
+        }
+        await press('\r');
 
-      await waitForOutput(getOutput, 'JS/TS Package Manager:');
+        await waitForOutput(getOutput, 'JS/TS Package Manager:');
 
-      // 6. package-manager: press Enter on default ('yarn') -> must proceed to root-linter
-      await press('\r');
-      await waitForOutput(getOutput, 'Root-Only Linter');
+        // 6. package-manager: press Enter on default ('yarn') -> must proceed to root-linter
+        await press('\r');
+        await waitForOutput(getOutput, 'Root-Only Linter');
 
-      // 7. root-linter: press Enter on default ('eslint') -> must proceed to monorepo
-      await press('\r');
-      await waitForOutput(getOutput, 'Is this a Monorepo (NX)?');
+        // 7. root-linter: press Enter on default ('eslint') -> must proceed to monorepo
+        await press('\r');
+        await waitForOutput(getOutput, 'Is this a Monorepo (NX)?');
 
-      // 8. monorepo: press Enter on default ('yes') -> must proceed to frameworks
-      await press('\r');
-      await waitForOutput(getOutput, 'Select Frameworks, Design Systems, CSS, Testing');
+        // 8. monorepo: press Enter on default ('yes') -> must proceed to frameworks
+        await press('\r');
+        await waitForOutput(getOutput, 'Select Frameworks, Design Systems, CSS, Testing');
+        expect(getOutput()).not.toContain('Use Makefiles for non-JavaScript Projects?');
 
-      // 9. frameworks -> 10. domains -> 11. tools -> 12. agents -> 13. mcps
-      await press('\r');
-      await waitForOutput(getOutput, 'Select Project Domains');
-      await press('\r');
-      await waitForOutput(getOutput, 'Select Additional Tools');
-      await press('\r');
-      await waitForOutput(getOutput, 'Select Universal AI Agents:');
-      await press('\r');
-      await waitForOutput(getOutput, 'Select Verified Safe MCP Servers');
-      await press('\r');
+        // 9. frameworks -> 10. domains -> 11. tools -> 12. agents -> 13. mcps
+        await press('\r');
+        await waitForOutput(getOutput, 'Select Project Domains');
+        await press('\r');
+        await waitForOutput(getOutput, 'Select Additional Tools');
+        await press('\r');
+        await waitForOutput(getOutput, 'Select Universal AI Agents:');
+        await press('\r');
+        await waitForOutput(getOutput, 'Select Verified Safe MCP Servers');
+        await press('\r');
 
-      await waitForOutput(getOutput, 'Workspace Applications & Packages');
-      expect(getOutput()).toContain('apps/api');
-      expect(getOutput()).toContain('apps/web');
-      expect(getOutput()).toContain('packages/contracts');
+        await waitForOutput(getOutput, 'Workspace Applications & Packages');
+        expect(getOutput()).toContain('apps/api');
+        expect(getOutput()).toContain('apps/web');
+        expect(getOutput()).toContain('packages/contracts');
 
-      // 14. apps-packages: press Enter on first option ("Continue to Architecture Selector")
-      await press('\r');
+        // 14. apps-packages: press Enter on first option ("Continue to Architecture Selector")
+        await press('\r');
 
-      await waitForOutput(getOutput, 'Architecture Pattern:');
+        await waitForOutput(getOutput, 'Architecture Pattern:');
 
-      // 14. arch-pattern -> 15. folder-org -> 16. file-naming -> 17. test-org (all defaultValue Selects)
-      await press('\r');
-      await waitForOutput(getOutput, 'Folder Organization');
+        // 14. arch-pattern -> 15. folder-org -> 16. file-naming -> 17. test-org (all defaultValue Selects)
+        await press('\r');
+        await waitForOutput(getOutput, 'Folder Organization');
 
-      await press('\r');
-      await waitForOutput(getOutput, 'File Naming Convention:');
+        await press('\r');
+        await waitForOutput(getOutput, 'File Naming Convention:');
 
-      await press('\r');
-      await waitForOutput(getOutput, 'Test File Organization:');
+        await press('\r');
+        await waitForOutput(getOutput, 'Test File Organization:');
 
-      await press('\r');
-      await waitForOutput(getOutput, 'Enable test coverage threshold enforcement');
+        await press('\r');
+        await waitForOutput(getOutput, 'Enable test coverage threshold enforcement');
 
-      // 18. coverage-enabled -> 19. coverage-threshold -> 20. arch-options -> 21. preview
-      await press('\r');
-      await waitForOutput(getOutput, 'Minimum Coverage Threshold');
-      await press('\r');
-      await waitForOutput(getOutput, 'Architecture Additional Options:');
-      await press('\r');
+        // 18. coverage-enabled -> 19. coverage-threshold -> 20. arch-options -> 21. preview
+        await press('\r');
+        await waitForOutput(getOutput, 'Minimum Coverage Threshold');
+        await press('\r');
+        await waitForOutput(getOutput, 'Architecture Additional Options:');
+        await press('\r');
 
-      await waitForOutput(getOutput, 'Form Responses & Project Setup');
-      expect(getOutput()).toContain('Confirm & Launch little.bootstrapper Delivery!');
-    } finally {
-      instance.unmount();
-    }
-  });
+        await waitForOutput(getOutput, 'Form Responses & Project Setup');
+        expect(getOutput()).toContain('Confirm & Launch little.bootstrapper Delivery!');
+      } finally {
+        instance.unmount();
+      }
+    },
+  );
 });

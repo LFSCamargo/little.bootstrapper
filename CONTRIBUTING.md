@@ -13,3 +13,5 @@ Good news, everyone! We welcome contributions to the little.bootstrapper crew.
    - Place reusable Web UI components (ShadCN + Aceternity UI) inside `packages/ui-web`.
    - Mobile projects initialized via the CLI place reusable Mobile UI components inside `packages/ui-mobile`.
 6. **Test Placement**: Store unitary (`*.unit.test.ts`) and integration (`*.integration.test.ts`) tests close to implementation inside `__tests__/` folders (`src/**/__tests__/`), and keep root `tests/e2e/` exclusively for End-to-End tests.
+
+When changing native workspace generation, keep the four Make targets (`build`, `start`, `dev`, `test`) and default test goal consistent. Run generator integration tests to verify root forwarding, per-workspace working directories, failure propagation, and mixed JS/native setups. See [native workspace commands](README.md#native-workspace-commands).

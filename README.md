@@ -50,6 +50,22 @@
 
 ---
 
+## Native workspace commands
+
+Every generated Go, Rust, or Solidity app/package has a local `Makefile`, regardless of the legacy `useMakefiles` setting. The standard targets are `build`, `start`, `dev`, and `test`; running bare `make` defaults to `test` both locally and at the root. Root Make targets cover native workspaces; JavaScript workspaces keep their package-manager commands.
+
+```sh
+make                       # Test all native workspaces
+make build                 # Build all native workspaces
+make start                 # Start native executables and local contract nodes in parallel
+make dev                   # Run local native development commands in parallel
+make test-packages-core    # Test packages/core only
+make build-apps-api        # Build apps/api only
+make -C packages/core test # Run the same command directly in a workspace
+```
+
+Individual root targets follow `<command>-apps-<name>` or `<command>-packages-<name>`. Go apps use `go run .` for development; Rust executables use `cargo run`. Library `dev` targets run native tests, while their `start` targets fail with an explanation that they have no executable. Root `start` skips libraries. Foundry uses `forge build`, `forge test`, `forge test --watch` for development, and `anvil` for a local node. Hardhat uses `compile`, `test`, and `node` through its pinned local dependency. Install the relevant native toolchains before running these targets. Nx delegates native targets to each workspace's Makefile.
+
 ## 🏁 Quick Start
 
 ```bash

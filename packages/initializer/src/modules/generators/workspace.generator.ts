@@ -9,6 +9,7 @@ import type {
   WorkspaceKind,
 } from '../../types/index.js';
 import { getPinnedVersion } from '../catalog/index.js';
+import { nativeTargets } from './makefile.generator.js';
 
 const BACKEND_FRAMEWORKS = new Set<Framework>([
   'hono',
@@ -75,13 +76,7 @@ function buildProjectJson(
           },
           test: { executor: 'nx:run-commands', options: { command: 'vitest run' } },
         }
-      : {
-          build: {
-            executor: 'nx:run-commands',
-            options: { command: 'echo "Build via toolchain"' },
-          },
-          test: { executor: 'nx:run-commands', options: { command: 'echo "Test via toolchain"' } },
-        },
+      : nativeTargets(`${kind === 'application' ? 'apps' : 'packages'}/${name}`),
   };
 }
 
@@ -1225,6 +1220,9 @@ export async function scaffoldWorkspaceApp(
   const relBase = `apps/${app.name}`;
   const kind = inferWorkspaceKind(app, 'app');
 
+  if (app.language === 'solidity') {
+    return scaffoldGenericWorkspace(appDir, relBase, app, 'app', config);
+  }
   if (kind === 'backend') {
     return scaffoldBackendApp(appDir, relBase, app, config, hasContracts);
   }

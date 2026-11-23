@@ -31,6 +31,7 @@ function renderRuleMarkdown(ruleId: MarketplaceRuleId, config?: BootstrapConfig)
 - Path Aliases: \`${config.architecture.pathAliases}\`
 - Barrel Exports: \`${config.architecture.barrelExports}\`
 - Separated UI Packages: \`packages/ui-cli\`, \`packages/ui-web\`, \`packages/ui-mobile\` (only what this stack uses)
+- Native workspaces must have Makefiles with build, start, dev, and test targets, test as the default, and forwarding from the root Makefile.
 - **Atomic Unit Isolation**: \`src/commands/\`, \`src/modules/\`, \`src/ui/screens/\`, \`src/types/\`, \`src/assets/\` with barrel-only cross-module imports.
 `;
   }

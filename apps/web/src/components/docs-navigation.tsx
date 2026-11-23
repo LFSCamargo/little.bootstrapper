@@ -4,6 +4,7 @@ export const DOC_SECTIONS = [
   { id: 'starter-product', label: 'Starter product' },
   { id: 'ai-ecosystem', label: 'AI ecosystem' },
   { id: 'security', label: 'Security' },
+  { id: 'native-commands', label: 'Native commands' },
   { id: 'delivery-pipeline', label: 'Delivery pipeline' },
   { id: 'blueprint', label: 'Project blueprint' },
   { id: 'architecture-patterns', label: 'Architecture patterns' },

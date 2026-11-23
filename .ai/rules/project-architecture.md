@@ -11,3 +11,5 @@
 - Barrel Exports: `true`
 - Separated UI Packages: `packages/ui-cli`, `packages/ui-web`, `packages/ui-mobile` (only what this stack uses)
 - **Atomic Unit Isolation**: `src/commands/`, `src/modules/`, `src/ui/screens/`, `src/types/`, `src/assets/` with barrel-only cross-module imports.
+
+- Generate a Makefile in every non-JavaScript workspace with `build`, `start`, `dev`, and `test`; default to `test` and forward native commands through the root Makefile.

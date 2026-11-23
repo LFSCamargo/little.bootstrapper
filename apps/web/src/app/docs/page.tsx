@@ -187,6 +187,33 @@ export default function DocsPage() {
           </CardSpotlight>
         </div>
 
+        <Card id="native-commands">
+          <CardHeader>
+            <CardTitle>Native workspace commands</CardTitle>
+            <CardDescription>
+              One command interface for Go, Rust, and Solidity workspaces.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
+            <p>
+              Every native app and package gets a Makefile with <code>build</code>,{' '}
+              <code>start</code>, <code>dev</code>, and <code>test</code>. Bare <code>make</code>{' '}
+              runs tests, both in a workspace and at the root.
+            </p>
+            <pre className="overflow-x-auto rounded-xl bg-zinc-950 p-4 font-mono text-xs text-teal-300">{`make                         # Test native workspaces
+make build                   # Build native workspaces
+make start                   # Start executables / local contract nodes
+make dev                     # Local development
+make test-packages-core      # Target packages/core
+make build-apps-api           # Target apps/api`}</pre>
+            <p>
+              Root start and dev commands run workspaces in parallel. Libraries have no executable:
+              their start target explains this, and their dev target runs tests. Root start skips
+              libraries. JavaScript workspaces keep their package-manager commands.
+            </p>
+          </CardContent>
+        </Card>
+
         {/* Outside Delivery Pipeline Reference */}
         <Card id="delivery-pipeline">
           <CardHeader>

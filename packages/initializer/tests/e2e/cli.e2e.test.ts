@@ -72,6 +72,9 @@ describe('little.bootstrapper CLI (E2E)', () => {
         fs.access(path.join(projectDir, '.cursor/rules/universal.mdc')),
       ).resolves.toBeUndefined();
       await expect(fs.access(path.join(projectDir, 'Makefile'))).resolves.toBeUndefined();
+      const defaultMake = await execFileAsync('make', ['-n'], { cwd: projectDir });
+      expect(defaultMake.stdout).toContain('for test');
+      expect(defaultMake.stdout).not.toContain('go build');
       await expect(fs.access(path.join(projectDir, 'mcp.json'))).resolves.toBeUndefined();
 
       // 1b. Browse, Search & Install Verified Safe MCPs via CLI

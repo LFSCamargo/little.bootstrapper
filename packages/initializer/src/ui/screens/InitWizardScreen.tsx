@@ -82,7 +82,6 @@ type InitStep =
   | 'package-manager'
   | 'root-linter'
   | 'monorepo'
-  | 'makefiles'
   | 'frameworks'
   | 'domains'
   | 'tools'
@@ -123,7 +122,6 @@ const STEP_INDEX: Record<InitStep, number> = {
   'package-manager': 6,
   'root-linter': 7,
   monorepo: 8,
-  makefiles: 8,
   frameworks: 9,
   domains: 10,
   tools: 11,
@@ -449,7 +447,7 @@ export const InitWizardScreen: React.FC<InitWizardScreenProps> = ({
         { key: 'Esc', action: 'Previous step' },
       ];
     }
-    if (step === 'codeowners' || step === 'makefiles' || step === 'coverage-enabled') {
+    if (step === 'codeowners' || step === 'coverage-enabled') {
       return [
         { key: 'Y/N', action: 'Choose' },
         { key: 'Enter', action: 'Confirm' },
@@ -665,23 +663,7 @@ export const InitWizardScreen: React.FC<InitWizardScreenProps> = ({
               const isMono = value === 'yes';
               setMonorepo(isMono);
               const hasNonJs = languages.some((l) => l !== 'typescript');
-              goTo(isMono && hasNonJs ? 'makefiles' : 'frameworks');
-            }}
-          />
-        </Box>
-      )}
-
-      {step === 'makefiles' && (
-        <Box gap={1}>
-          <Text bold>Use Makefiles for non-JavaScript Projects?</Text>
-          <ConfirmInput
-            defaultChoice={useMakefiles ? 'confirm' : 'cancel'}
-            onConfirm={() => {
-              setUseMakefiles(true);
-              goTo('frameworks');
-            }}
-            onCancel={() => {
-              setUseMakefiles(false);
+              setUseMakefiles(hasNonJs);
               goTo('frameworks');
             }}
           />
