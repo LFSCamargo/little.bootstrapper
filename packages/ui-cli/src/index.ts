@@ -5,6 +5,7 @@ export * from './components/BenderCard.js';
 export * from './components/StepProgress.js';
 export * from './components/DeliveryLoader.js';
 export * from './components/MultiSelect.js';
+export * from './components/Select.js';
 export * from './components/FolderPreview.js';
 export * from './components/StatusFooter.js';
 export * from './components/SummaryTable.js';
@@ -17,7 +18,7 @@ export {
   ConfirmInput,
   OrderedList,
   ProgressBar,
-  Select,
+  Select as InkUiSelect,
   Spinner,
   StatusMessage,
   TextInput as InkUiTextInput,

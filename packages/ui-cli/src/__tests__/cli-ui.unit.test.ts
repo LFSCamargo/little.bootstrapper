@@ -25,6 +25,8 @@ import {
   ConfirmInput,
   ProgressBar,
   Select,
+  findInitialSelectIndex,
+  computeSelectWindow,
   Spinner,
   StatusMessage,
 } from '../index.js';
@@ -46,7 +48,7 @@ function renderInkToString(element: React.ReactElement): string {
 }
 
 describe('@little-bootstrapper/ui-cli (unit)', () => {
-  it('contains the exact Planet Express Ship ASCII illustration from asciiart.website/art/4158 (SSt)', () => {
+  it('contains the exact Futurama delivery ship ASCII illustration from asciiart.website/art/4158 (SSt)', () => {
     expect(PLANET_EXPRESS_SHIP_ASCII).toContain('SSt');
     expect(PLANET_EXPRESS_SHIP_ASCII).toContain("(,;')");
     expect(PLANET_EXPRESS_SHIP_ASCII).toContain('__________');
@@ -116,7 +118,7 @@ describe('@little-bootstrapper/ui-cli (unit)', () => {
     expect(bannerStatic).toContain('Custom Delivery');
 
     const bannerAnimated = renderInkToString(React.createElement(PlanetBanner, { animated: true }));
-    expect(bannerAnimated).toContain('PLANET EXPRESS');
+    expect(bannerAnimated).toContain('little.bootstrapper');
 
     const bender = renderInkToString(
       React.createElement(BenderCard, {
@@ -296,5 +298,95 @@ describe('@little-bootstrapper/ui-cli (unit)', () => {
 
     expect(backCalls).toBe(1);
     expect(submitted).toEqual([['playwright']]);
+  });
+
+  it('computes Select initial index and scroll window accurately', () => {
+    const opts = [
+      { label: 'Yarn', value: 'yarn' },
+      { label: 'NPM', value: 'npm' },
+      { label: 'PNPM', value: 'pnpm' },
+      { label: 'Bun', value: 'bun' },
+    ];
+    expect(findInitialSelectIndex(opts)).toBe(0);
+    expect(findInitialSelectIndex(opts, 'pnpm')).toBe(2);
+    expect(findInitialSelectIndex(opts, 'missing')).toBe(0);
+
+    expect(computeSelectWindow(0, 0, 5, 0)).toEqual({ from: 0, to: 0 });
+    expect(computeSelectWindow(4, 2, 5, 0)).toEqual({ from: 0, to: 4 });
+    expect(computeSelectWindow(6, 5, 3, 0)).toEqual({ from: 3, to: 6 });
+    expect(computeSelectWindow(6, 1, 3, 3)).toEqual({ from: 1, to: 4 });
+  });
+
+  it('allows Select to confirm defaultValue immediately on Enter and navigate with arrow keys', async () => {
+    const stdout = new PassThrough() as PassThrough & { columns?: number; rows?: number };
+    stdout.columns = 100;
+    stdout.rows = 40;
+    const stdin = new PassThrough() as PassThrough & {
+      isTTY?: boolean;
+      setRawMode?: (mode: boolean) => typeof stdin;
+      ref?: () => typeof stdin;
+      unref?: () => typeof stdin;
+    };
+    stdin.isTTY = true;
+    stdin.setRawMode = () => stdin;
+    stdin.ref = () => stdin;
+    stdin.unref = () => stdin;
+
+    const selected: string[] = [];
+    const instance = render(
+      React.createElement(
+        PlanetThemeProvider,
+        null,
+        React.createElement(Select, {
+          defaultValue: 'pnpm',
+          visibleOptionCount: 2,
+          highlightText: 'PNPM',
+          options: [
+            { label: 'Yarn', value: 'yarn' },
+            { label: 'NPM', value: 'npm' },
+            { label: 'PNPM', value: 'pnpm' },
+            { label: 'Bun', value: 'bun' },
+          ],
+          onChange: (val) => {
+            selected.push(val);
+          },
+        }),
+      ),
+      {
+        stdout: stdout as unknown as NodeJS.WriteStream,
+        stdin: stdin as unknown as NodeJS.ReadStream,
+        patchConsole: false,
+      },
+    );
+
+    const tick = () => new Promise((r) => setTimeout(r, 15));
+    // Pressing Enter right away should confirm defaultValue ('pnpm') instead of stalling
+    stdin.write('\r');
+    await tick();
+    // Move down to 'bun' and confirm
+    stdin.write('\u001b[B');
+    await tick();
+    stdin.write('\r');
+    await tick();
+    // Move up twice to 'npm' and confirm
+    stdin.write('\u001b[A');
+    await tick();
+    stdin.write('\u001b[A');
+    await tick();
+    stdin.write('\r');
+    await tick();
+
+    instance.unmount();
+
+    expect(selected).toEqual(['pnpm', 'bun', 'npm']);
+
+    // Verify disabled Select renders cleanly without throwing
+    const disabledOut = renderInkToString(
+      React.createElement(Select, {
+        isDisabled: true,
+        options: [],
+      }),
+    );
+    expect(typeof disabledOut).toBe('string');
   });
 });

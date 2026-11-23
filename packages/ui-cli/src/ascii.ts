@@ -1,5 +1,5 @@
 /**
- * Exact ASCII Art Illustrations from PROMPT.md
+ * ASCII Art Illustrations
  *
  * Futurama delivery ship: https://asciiart.website/art/4158 (by Sebastian Stöcker / SSt)
  * Bender Mascot: Silver Saks
