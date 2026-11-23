@@ -1,0 +1,16 @@
+---
+description: Universal Planet Express AI Rules
+globs: "**/*"
+alwaysApply: true
+---
+
+# little-bootstrapper — Universal AI Agent Instructions
+
+> Powered by Planet Express (`little.bootstrapper`) — Good news, everyone!
+
+All AI agents (Open Code, Antigravity, Claude, Codex, Cursor) share the exact same context-selective canonical rules and skills in `.ai/`:
+
+- **Active Rules** (`.ai/rules/*.md`): quality-gating, security, test-driven, regression-testing, e2e-testing, project-architecture, project-overview, docs-sync, ai-docs-discipline, typescript-rules, nx-monorepo-rules, ink-anti-patterns, cli-ui-components, nextjs-anti-patterns, shadcn-aceternity-rules, playwright-testing-rules, web-ui-components
+- **Active Skills** (`.ai/skills/*/SKILL.md`): ai-memory, commitlint-husky-prettier, security-checker, spaghetti-checker, complexity-checker, n-plus-one-checker, commit-separately, docs-pruner, nx-workspace-audit, playwright-e2e-author, mcp-security-audit
+- **Bootstrap Config**: `bootstrap.config.json`
+- **Anti-Doc-Sprawl**: Follow `.ai/rules/ai-docs-discipline.md` — update canonical docs in place and never spawn throwaway markdown dumps.

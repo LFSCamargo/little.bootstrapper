@@ -1,0 +1,84 @@
+{
+  "version": "1.0.0",
+  "project": {
+    "name": "little-bootstrapper",
+    "description": "Planet Express Universal AI Agent Project Initializer",
+    "author": "lfscamargo",
+    "codeowners": true
+  },
+  "stack": {
+    "languages": ["typescript"],
+    "packageManager": "yarn",
+    "monorepo": true,
+    "useMakefiles": false,
+    "frameworks": [
+      "ink",
+      "nextjs",
+      "vitest",
+      "playwright",
+      "prettier",
+      "tailwindcss",
+      "shadcn",
+      "aceternity-ui",
+      "framer-motion"
+    ],
+    "tools": [
+      "ai-memory",
+      "commitlint-husky-prettier",
+      "security-checker",
+      "spaghetti-checker",
+      "complexity-checker",
+      "n-plus-one-checker",
+      "commit-separately",
+      "docs-pruner",
+      "nx-workspace-audit",
+      "playwright-e2e-author",
+      "mcp-security-audit"
+    ],
+    "agents": ["opencode", "antigravity", "claude", "codex", "cursor"],
+    "mcps": ["ai-memory", "context7", "playwright", "shadcn", "nx", "nextjs-devtools", "tailwind"],
+    "domains": ["devtools"]
+  },
+  "workspace": {
+    "apps": [
+      {
+        "name": "web",
+        "language": "typescript",
+        "framework": "nextjs"
+      }
+    ],
+    "packages": [
+      {
+        "name": "initializer",
+        "language": "typescript",
+        "framework": "ink"
+      },
+      {
+        "name": "ui-cli",
+        "language": "typescript",
+        "framework": "ink"
+      },
+      {
+        "name": "ui-web",
+        "language": "typescript",
+        "framework": "shadcn"
+      }
+    ]
+  },
+  "architecture": {
+    "pattern": "modular",
+    "folderOrganization": "module-based",
+    "fileNaming": "kebab-case",
+    "testOrganization": "dedicated-tests",
+    "strictBoundaries": true,
+    "pathAliases": true,
+    "barrelExports": true,
+    "exampleModule": false
+  },
+  "testing": {
+    "coverage": {
+      "enabled": true,
+      "threshold": 75
+    }
+  }
+}

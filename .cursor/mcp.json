@@ -1,0 +1,32 @@
+{
+  "mcpServers": {
+    "ai-memory": {
+      "command": "npx",
+      "args": ["-y", "@akitaonrails/ai-memory-mcp@latest"]
+    },
+    "context7": {
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp@1.0.21"]
+    },
+    "playwright": {
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@0.0.28"]
+    },
+    "shadcn": {
+      "command": "npx",
+      "args": ["-y", "shadcn@2.5.0", "mcp"]
+    },
+    "nx": {
+      "command": "npx",
+      "args": ["-y", "nx-mcp@0.1.5"]
+    },
+    "nextjs-devtools": {
+      "command": "npx",
+      "args": ["-y", "next-devtools-mcp@0.3.1"]
+    },
+    "tailwind": {
+      "command": "npx",
+      "args": ["-y", "tailwindcss-mcp-server@0.3.2"]
+    }
+  }
+}
