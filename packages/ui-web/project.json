@@ -1,0 +1,25 @@
+{
+  "name": "@little-bootstrapper/ui-web",
+  "sourceRoot": "packages/ui-web/src",
+  "projectType": "library",
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "yarn workspace @little-bootstrapper/ui-web build"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "yarn workspace @little-bootstrapper/ui-web test"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "yarn workspace @little-bootstrapper/ui-web typecheck"
+      }
+    }
+  }
+}
