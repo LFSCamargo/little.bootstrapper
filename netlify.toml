@@ -1,0 +1,4 @@
+[build]
+  base = "."
+  command = "yarn workspace @little-bootstrapper/web build"
+  publish = "apps/web/.next"
