@@ -49,7 +49,7 @@ describe('@little-bootstrapper/web (unit)', () => {
     expect(html).toContain('little.bootstrapper documentation');
     expect(html).toContain('Documentation sections');
     expect(html).toContain('Native workspace commands');
-    expect(html).toContain('make test-packages-core');
+    expect(html).toContain('yarn nx run chatify-stack-api:start');
     expect(html).toContain('id="architecture-patterns"');
     expect(html).toContain('data-testid="docs-content"');
     expect(html).toContain('little-bootstrapper init');

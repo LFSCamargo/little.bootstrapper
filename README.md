@@ -31,7 +31,7 @@
 - **Mandatory UI Package Separation during Initialization**:
   - `packages/ui-cli` — Shared React Ink + `@inkjs/ui` animated CLI components (created when CLI frameworks are selected)
   - `packages/ui-web` — Shared Web UI components with ShadCN + Aceternity UI (created when Web frameworks are selected)
-  - `packages/ui-mobile` — Shared Mobile UI components for React Native / Lynx (created when Mobile frameworks are selected)
+  - `packages/ui-mobile` — Reserved for future mobile templates; current initialization rejects React Native and Lynx
 - **All Core CLI Workflows**:
   - `init` — Interactive React Ink wizard (and `--yes` CI mode) with **searchable multi-select** for Frameworks, Project Domains (e.g. `financial`, `web3`), Verified Safe MCPs, Apps & Packages Editor, UI Package Separation, Architecture Selector, and Live Folder Preview.
   - `rules` — **Rules Marketplace** (`28` context-selective rules in `templates/rules/` + `12` skills in `templates/skills/`) covering frameworks (`nx-monorepo`, `ink`, `nextjs`, `shadcn-aceternity`, `playwright`, `mobile`, `rest-api`, `orm-database`, `nuxt-vue`, `tauri`, `smart-contracts`), languages (`typescript`, `go`, `rust`, `solidity`), and domains (`financial-rules`, `ai-docs-discipline`).
@@ -52,19 +52,25 @@
 
 ## Native workspace commands
 
-Every generated Go, Rust, or Solidity app/package has a local `Makefile`, regardless of the legacy `useMakefiles` setting. The standard targets are `build`, `start`, `dev`, and `test`; running bare `make` defaults to `test` both locally and at the root. Root Make targets cover native workspaces; JavaScript workspaces keep their package-manager commands.
+Generated Go and Rust workspaces use Nx native plugins and root `go.work` / Cargo workspace manifests. Use `yarn build`, `yarn test`, `yarn typecheck`, `yarn start`, or `yarn dev` at the root, or `yarn nx run <project>:build` / `:test` / `:start` / `:dev` for one project. Install the selected native toolchains before running these commands.
 
-```sh
-make                       # Test all native workspaces
-make build                 # Build all native workspaces
-make start                 # Start native executables and local contract nodes in parallel
-make dev                   # Run local native development commands in parallel
-make test-packages-core    # Test packages/core only
-make build-apps-api        # Build apps/api only
-make -C packages/core test # Run the same command directly in a workspace
-```
+The API template uses the selected framework: Axum or Hyper for Rust; Chi, Gin, Echo, or Fiber for Go. Each serves `/health` on port 4000 (override with `PORT`) and includes native tests. Repository names such as `chatify.stack` remain intact; Cargo package and Nx Rust project names are normalized to `chatify-stack-api` and `chatify-stack-contracts`.
 
-Individual root targets follow `<command>-apps-<name>` or `<command>-packages-<name>`. Go apps use `go run .` for development; Rust executables use `cargo run`. Library `dev` targets run native tests, while their `start` targets fail with an explanation that they have no executable. Root `start` skips libraries. Foundry uses `forge build`, `forge test`, `forge test --watch` for development, and `anvil` for a local node. Hardhat uses `compile`, `test`, and `node` through its pinned local dependency. Install the relevant native toolchains before running these targets. Nx delegates native targets to each workspace's Makefile.
+Rust backends get a shared `packages/contracts` crate containing serde health DTOs. In mixed TypeScript/Rust projects it also exports matching TypeScript/Zod contracts. The Rust API imports the crate, the web app consumes its JavaScript package, and Nx builds shared declarations before frontend checks. React/Vite output includes HTML and React entry points, a health panel, a development proxy to the API, and interaction tests.
+
+Preview the inferred configuration and destination with `little-bootstrapper init --dry-run --languages typescript,golang --frameworks hono,chi,nextjs`.
+
+Headless and interactive initialization derive workspace defaults from the selected languages and frameworks. Selecting multiple backend or web frameworks creates separate apps, such as `apps/api` and `apps/api-chi`. Each backend language gets its own contracts package.
+
+To inspect an existing repository, run `little-bootstrapper normalize --check --dir ../orbit`. Use `--apply` to install missing agent instructions, rules, and skills. Existing instruction files keep their contents. Detection checks the root and immediate workspaces under `apps/` and `packages/`, including Tauri's `src-tauri/Cargo.toml`.
+
+Run native compiler and live HTTP regressions with `NATIVE_TOOLCHAIN_TESTS=1 yarn workspace @little-bootstrapper/initializer exec vitest run tests/e2e/native-backends.e2e.test.ts` (requires Go, Rust, registry access, and permission to bind localhost).
+
+Initialization requires an empty destination and monorepo mode. Existing projects are never silently overwritten. Jest, React Native, Lynx, Tauri, and Rust smart-contract SDKs (Anchor, Soroban, Near, Stylus) are currently rejected because complete templates are not implemented. Rust health DTO contracts are distinct from on-chain smart contracts.
+
+Next.js, React/Vite, and Nuxt include runnable entries and a same-origin `/health` proxy; set `API_URL` to change the backend address. Generated tests inherit the configured coverage threshold. Generated CI runs `node scripts/validate.mjs` locally rather than downloading an unpinned CLI. `generate <name> --workspace apps/api` places modules and executable tests inside that workspace, preserves existing exports, and refuses to overwrite a module.
+
+Regression checks cover all six architecture patterns, four naming conventions, and three test layouts. Run dependency-install checks with `PACKAGE_MANAGER_TESTS=1 yarn workspace @little-bootstrapper/initializer exec vitest run tests/e2e/package-managers.e2e.test.ts`; these require Yarn, npm, pnpm, Bun, and registry access. Native toolchain checks exercise six backend frameworks across all six architectures. Passing template generation alone does not establish runtime support.
 
 ## 🏁 Quick Start
 
@@ -128,7 +134,7 @@ little.bootstrapper/
 └── nx.json                         # NX monorepo configuration
 ```
 
-_(Note: `packages/ui-mobile` is scaffolded automatically by the initializer whenever a project selects mobile frameworks such as React Native or Lynx.)_
+Mobile and desktop application templates are not yet implemented; initialization rejects those selections before writing files.
 
 ---
 

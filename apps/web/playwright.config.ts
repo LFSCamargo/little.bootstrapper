@@ -16,9 +16,10 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: '../../node_modules/.bin/next start -p 3123 -H 127.0.0.1',
+    command:
+      '../../node_modules/.bin/next build && ../../node_modules/.bin/next start -p 3123 -H 127.0.0.1',
     url: 'http://127.0.0.1:3123',
     reuseExistingServer: !process.env.CI,
-    timeout: 60_000,
+    timeout: 180_000,
   },
 });

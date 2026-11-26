@@ -9,7 +9,9 @@
 - Strict Boundaries: `true`
 - Path Aliases: `true`
 - Barrel Exports: `true`
-- Separated UI Packages: `packages/ui-cli`, `packages/ui-web`, `packages/ui-mobile` (only what this stack uses)
+- Separated UI Packages: `packages/ui-web` and `packages/ui-mobile` (only what this stack uses); CLI UI components live inside the Ink app.
 - **Atomic Unit Isolation**: `src/commands/`, `src/modules/`, `src/ui/screens/`, `src/types/`, `src/assets/` with barrel-only cross-module imports.
 
-- Generate a Makefile in every non-JavaScript workspace with `build`, `start`, `dev`, and `test`; default to `test` and forward native commands through the root Makefile.
+- Native workspaces use Nx plugins with root Cargo/go.work manifests; preserve selected backend frameworks and generate shared Rust DTOs plus TypeScript contracts for mixed Rust/web projects.
+
+- Initialization requires an empty destination. Preserve existing projects and module exports. Verify generated builds and tests across package managers; do not equate file generation or explicit rejection with runtime support.

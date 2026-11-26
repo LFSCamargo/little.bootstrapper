@@ -191,25 +191,24 @@ export default function DocsPage() {
           <CardHeader>
             <CardTitle>Native workspace commands</CardTitle>
             <CardDescription>
-              One command interface for Go, Rust, and Solidity workspaces.
+              Framework-specific Rust and Go services with Nx orchestration.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
             <p>
-              Every native app and package gets a Makefile with <code>build</code>,{' '}
-              <code>start</code>, <code>dev</code>, and <code>test</code>. Bare <code>make</code>{' '}
-              runs tests, both in a workspace and at the root.
+              Native services use the selected framework: Axum or Hyper for Rust, and Chi, Gin,
+              Echo, or Fiber for Go. Rust APIs import a shared contracts crate; mixed Rust/web
+              projects also get matching TypeScript/Zod exports.
             </p>
-            <pre className="overflow-x-auto rounded-xl bg-zinc-950 p-4 font-mono text-xs text-teal-300">{`make                         # Test native workspaces
-make build                   # Build native workspaces
-make start                   # Start executables / local contract nodes
-make dev                     # Local development
-make test-packages-core      # Target packages/core
-make build-apps-api           # Target apps/api`}</pre>
+            <pre className="overflow-x-auto rounded-xl bg-zinc-950 p-4 font-mono text-xs text-teal-300">{`yarn build                       # Build the workspace
+yarn test                        # Test the workspace
+yarn typecheck                   # Check all languages
+yarn dev                         # Start development services
+yarn nx run chatify-stack-api:start # One Rust service`}</pre>
             <p>
-              Root start and dev commands run workspaces in parallel. Libraries have no executable:
-              their start target explains this, and their dev target runs tests. Root start skips
-              libraries. JavaScript workspaces keep their package-manager commands.
+              Root Cargo and Go workspace manifests connect native packages. React/Vite apps include
+              real entry points, a health panel, and an API development proxy. Set PORT to change
+              the backend port from 4000.
             </p>
           </CardContent>
         </Card>
