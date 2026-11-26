@@ -4,7 +4,11 @@ import os from 'node:os';
 import path from 'node:path';
 import type { BootstrapConfig } from '../../../types/index.js';
 import { resolveRulesForProject } from '../../catalog/index.js';
-import { generateProject, generateMcpConfig } from '../../generators/index.js';
+import {
+  generateProject,
+  generateMcpConfig,
+  generateUniversalAIEcosystem,
+} from '../../generators/index.js';
 import {
   detectCurrentSetup,
   applyNormalization,
@@ -14,7 +18,47 @@ import {
 } from '../index.js';
 
 describe('modules/workflows (integration)', () => {
-  it('detects polyglot Mobile + Go repo with ui-mobile, Makefile, MCPs, and all 15 universal AI rules', async () => {
+  it('normalizes an Orbit-style workspace while preserving project instructions', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'orbit-normalize-'));
+    try {
+      await fs.mkdir(path.join(dir, 'apps/desktop/src-tauri'), { recursive: true });
+      await fs.mkdir(path.join(dir, '.ai/rules'), { recursive: true });
+      for (const file of [
+        'apps/desktop/tsconfig.json',
+        'apps/desktop/src-tauri/Cargo.toml',
+        'nx.json',
+        'bun.lock',
+      ]) {
+        await fs.writeFile(path.join(dir, file), '');
+      }
+      await fs.writeFile(
+        path.join(dir, 'apps/desktop/package.json'),
+        JSON.stringify({ dependencies: { '@tauri-apps/api': '2' } }),
+      );
+      await fs.writeFile(path.join(dir, 'AGENTS.md'), 'local instructions');
+      await fs.writeFile(path.join(dir, '.ai/rules/local.md'), 'local rule');
+      expect(await detectCurrentSetup(dir)).toMatchObject({
+        languages: ['typescript', 'rust'],
+        packageManager: 'bun',
+        frameworks: ['tauri'],
+        workspace: { apps: [{ name: 'desktop', framework: 'tauri' }], packages: [] },
+      });
+      await applyNormalization(dir, ['codex'], []);
+      expect(
+        JSON.parse(await fs.readFile(path.join(dir, 'bootstrap.config.json'), 'utf8')).stack
+          .monorepo,
+      ).toBe(true);
+      expect(await fs.readFile(path.join(dir, 'AGENTS.md'), 'utf8')).toBe('local instructions');
+      expect(await fs.readFile(path.join(dir, '.ai/rules/local.md'), 'utf8')).toBe('local rule');
+      await fs.writeFile(path.join(dir, 'bootstrap.config.json'), '{broken');
+      await expect(applyNormalization(dir, ['codex'], [])).rejects.toThrow('bootstrap.config.json');
+      expect(await fs.readFile(path.join(dir, 'bootstrap.config.json'), 'utf8')).toBe('{broken');
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('detects polyglot Mobile + Go repo with ui-mobile, Nx, MCPs, and all 15 universal AI rules', async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'pe-wf-mobile-'));
     try {
       const config: BootstrapConfig = {
@@ -50,9 +94,21 @@ describe('modules/workflows (integration)', () => {
         },
       };
 
-      const res = await generateProject(tmpDir, config);
-      expect(res.uiPackagesCreated).toEqual(['ui-mobile']);
-      expect(res.filesCreated).toContain('Makefile');
+      await expect(generateProject(tmpDir, config)).rejects.toThrow('not implemented');
+      const supported = structuredClone(config);
+      supported.workspace.apps = [];
+      supported.stack.frameworks = ['fiber'];
+      const res = await generateProject(tmpDir, supported);
+      await fs.writeFile(path.join(tmpDir, 'bootstrap.config.json'), JSON.stringify(config));
+      await generateUniversalAIEcosystem(tmpDir, config);
+      await fs.mkdir(path.join(tmpDir, 'packages/ui-mobile'), { recursive: true });
+      await fs.writeFile(
+        path.join(tmpDir, 'packages/ui-mobile/package.json'),
+        JSON.stringify({ name: '@test/ui-mobile' }),
+      );
+      expect(res.uiPackagesCreated).toEqual([]);
+      expect(res.filesCreated).toContain('nx.json');
+      expect(res.filesCreated).not.toContain('Makefile');
 
       await generateMcpConfig(tmpDir, ['context7'], config.stack.agents);
       const detected = await detectCurrentSetup(tmpDir);

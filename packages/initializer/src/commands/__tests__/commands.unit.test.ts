@@ -92,6 +92,17 @@ describe('commands (unit)', () => {
         exitCode: 1,
       });
 
+      expect(
+        await dispatchCommand(
+          ['init', '--dry-run', '--languages', 'golang', '--out', 'preview'],
+          tmpDir,
+        ),
+      ).toEqual({ kind: 'exit', exitCode: 0 });
+      expect(JSON.parse(logSpy.mock.lastCall?.[0])).toMatchObject({
+        targetDir: path.join(tmpDir, 'preview'),
+        workspace: { apps: [{ framework: 'chi' }] },
+      });
+      await expect(fs.stat(path.join(tmpDir, 'preview'))).rejects.toMatchObject({ code: 'ENOENT' });
       const projDir = path.join(tmpDir, 'ship-app');
       expect(
         await dispatchCommand(

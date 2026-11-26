@@ -38,8 +38,11 @@ describe('modules/generators (integration)', () => {
           agents: ['opencode', 'antigravity', 'claude', 'codex', 'cursor'],
         },
         workspace: {
-          apps: [{ name: 'web', language: 'typescript', framework: 'nextjs' }],
-          packages: [{ name: 'cli', language: 'typescript', framework: 'ink' }],
+          apps: [
+            { name: 'web', language: 'typescript', framework: 'nextjs', kind: 'web' },
+            { name: 'cli', language: 'typescript', framework: 'ink', kind: 'cli' },
+          ],
+          packages: [],
         },
         architecture: {
           pattern: 'modular',
@@ -53,23 +56,16 @@ describe('modules/generators (integration)', () => {
         },
       };
 
-      expect(resolveRequiredUiPackages(config)).toEqual(['ui-cli', 'ui-web']);
+      expect(resolveRequiredUiPackages(config)).toEqual(['ui-web']);
       const res = await generateProject(tmpDir, config);
-      expect(res.uiPackagesCreated).toEqual(['ui-cli', 'ui-web']);
-      expect(res.filesCreated).toContain('packages/ui-cli/package.json');
+      expect(res.uiPackagesCreated).toEqual(['ui-web']);
+      expect(res.filesCreated).not.toContain('packages/ui-cli/package.json');
       expect(res.filesCreated).toContain('packages/ui-web/components.json');
       expect(res.filesCreated).toContain('.yarnrc.yml');
+      expect(res.filesCreated).toContain('.yarn/releases/yarn-4.19.0.cjs');
+      const yarnrc = await fs.readFile(path.join(tmpDir, '.yarnrc.yml'), 'utf-8');
+      expect(yarnrc).toContain('yarnPath: .yarn/releases/yarn-4.19.0.cjs');
       expect(res.filesCreated).not.toContain('packages/ui-mobile/package.json');
-
-      const uiCliPkg = JSON.parse(
-        await fs.readFile(path.join(tmpDir, 'packages/ui-cli/package.json'), 'utf-8'),
-      ) as { dependencies: Record<string, string> };
-      expect(uiCliPkg.dependencies['@inkjs/ui']).toBe('2.0.0');
-      const uiCliSrc = await fs.readFile(
-        path.join(tmpDir, 'packages/ui-cli/src/index.ts'),
-        'utf-8',
-      );
-      expect(uiCliSrc).toContain("from '@inkjs/ui'");
 
       const loaded = await loadBootstrapConfig(tmpDir);
       const modFiles = await generateModule(tmpDir, 'slurms-mackenzie', loaded!);
@@ -84,11 +80,19 @@ describe('modules/generators (integration)', () => {
   it('installs verified safe MCPs into mcp.json, adds .env.example vars, and rejects unverified MCPs', async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'pe-gen-mcps-'));
     try {
+      await fs.mkdir(path.join(tmpDir, '.cursor'), { recursive: true });
+      await fs.writeFile(
+        path.join(tmpDir, '.cursor/mcp.json'),
+        JSON.stringify({ custom: true, mcpServers: { local: { command: 'custom' } } }),
+      );
       const res = await generateMcpConfig(
         tmpDir,
         ['ai-memory', 'context7', 'github', 'postgres'],
         ['opencode', 'antigravity', 'claude', 'codex', 'cursor'],
       );
+      expect(
+        JSON.parse(await fs.readFile(path.join(tmpDir, '.cursor/mcp.json'), 'utf8')),
+      ).toMatchObject({ custom: true, mcpServers: { local: { command: 'custom' } } });
       expect(res.filesWritten).toContain('mcp.json');
       expect(res.filesWritten).toContain('.cursor/mcp.json');
       expect(res.filesWritten).toContain('.mcp.json');
@@ -105,7 +109,7 @@ describe('modules/generators (integration)', () => {
     }
   });
 
-  it('generates configurable Vitest and Jest coverage thresholds (enabled & disabled)', async () => {
+  it('generates configurable Vitest coverage and rejects unsupported Jest templates', async () => {
     const tmpVitest = await fs.mkdtemp(path.join(os.tmpdir(), 'pe-gen-cov-vitest-'));
     const tmpJest = await fs.mkdtemp(path.join(os.tmpdir(), 'pe-gen-cov-jest-'));
     try {
@@ -126,7 +130,13 @@ describe('modules/generators (integration)', () => {
           tools: ['ai-memory'],
           agents: ['claude'],
         },
-        workspace: { apps: [], packages: [] },
+        workspace: {
+          apps: [
+            { name: 'cli', language: 'typescript', framework: 'ink', kind: 'cli' },
+            { name: 'web', language: 'typescript', framework: 'nextjs', kind: 'web' },
+          ],
+          packages: [],
+        },
         architecture: {
           pattern: 'modular',
           folderOrganization: 'module-based',
@@ -142,7 +152,7 @@ describe('modules/generators (integration)', () => {
 
       const vRes = await generateProject(tmpVitest, vitestConfig);
       expect(vRes.filesCreated).toContain('vitest.config.ts');
-      expect(vRes.filesCreated).toContain('packages/ui-cli/vitest.config.ts');
+      expect(vRes.filesCreated).not.toContain('packages/ui-cli/vitest.config.ts');
       expect(vRes.filesCreated).toContain('packages/ui-web/vitest.config.ts');
 
       const vCfgText = await fs.readFile(path.join(tmpVitest, 'vitest.config.ts'), 'utf-8');
@@ -153,7 +163,7 @@ describe('modules/generators (integration)', () => {
         devDependencies: Record<string, string>;
       };
       expect(vPkg.devDependencies['@vitest/coverage-v8']).toBe('3.1.1');
-      expect(vPkg.scripts['test:coverage']).toBe('vitest run --coverage');
+      expect(vPkg.scripts['test:coverage']).toBe('nx run-many -t test');
 
       const jestConfig: BootstrapConfig = {
         ...vitestConfig,
@@ -165,11 +175,16 @@ describe('modules/generators (integration)', () => {
         },
         testing: { coverage: { enabled: false, threshold: 60 } },
       };
-      const jRes = await generateProject(tmpJest, jestConfig);
-      expect(jRes.filesCreated).toContain('jest.config.ts');
-      expect(jRes.filesCreated).toContain('pnpm-workspace.yaml');
-      const jCfgText = await fs.readFile(path.join(tmpJest, 'jest.config.ts'), 'utf-8');
-      expect(jCfgText).toContain('collectCoverage: false');
+      await expect(generateProject(tmpJest, jestConfig)).rejects.toThrow(
+        'Jest templates are not implemented',
+      );
+      jestConfig.stack.frameworks = [];
+      const disabled = await generateProject(tmpJest, jestConfig);
+      expect(disabled.filesCreated).toContain('vitest.config.ts');
+      expect(disabled.filesCreated).toContain('pnpm-workspace.yaml');
+      expect(await fs.readFile(path.join(tmpJest, 'vitest.config.ts'), 'utf8')).toContain(
+        'enabled: false',
+      );
     } finally {
       await fs.rm(tmpVitest, { recursive: true, force: true });
       await fs.rm(tmpJest, { recursive: true, force: true });
@@ -254,7 +269,7 @@ describe('modules/generators (integration)', () => {
       expect(res.filesCreated).toContain('apps/web/package.json');
       expect(res.filesCreated).toContain('apps/web/src/app/layout.tsx');
       expect(res.filesCreated).toContain('apps/web/src/app/page.tsx');
-      expect(res.filesCreated).toContain('apps/web/src/components/health-panel.tsx');
+      expect(res.filesCreated).toContain('apps/web/src/app.tsx');
 
       // Polyglot per-workspace initialization
       expect(res.filesCreated).toContain('apps/go-svc/main.go');

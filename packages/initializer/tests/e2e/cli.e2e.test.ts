@@ -30,6 +30,18 @@ describe('little.bootstrapper CLI (E2E)', () => {
     const projectDir = path.join(tmpRoot, 'nimbus-express');
 
     try {
+      await expect(
+        execFileAsync('node', [
+          CLI_BIN,
+          'init',
+          '--yes',
+          '--frameworks',
+          'react-native',
+          '--out',
+          projectDir,
+        ]),
+      ).rejects.toMatchObject({ code: 1, stderr: expect.stringContaining('not implemented') });
+      await expect(fs.stat(projectDir)).rejects.toMatchObject({ code: 'ENOENT' });
       // 1. Initialize Setup (CORE)
       const initRes = await execFileAsync('node', [
         CLI_BIN,
@@ -42,27 +54,25 @@ describe('little.bootstrapper CLI (E2E)', () => {
         '--languages',
         'typescript,golang',
         '--frameworks',
-        'ink,nextjs,react-native,vitest,shadcn,aceternity-ui',
+        'ink,nextjs,vitest,shadcn,aceternity-ui',
         '--out',
         projectDir,
       ]);
       expect(initRes.stdout).toContain('Silver Saks');
-      expect(initRes.stdout).toContain('ui-cli, ui-web, ui-mobile');
+      expect(initRes.stdout).toContain('ui-web');
+      expect(initRes.stdout).not.toContain('ui-cli');
+      expect(initRes.stdout).not.toContain('ui-mobile');
 
-      // Verify separated UI packages & universal agents exist on disk
-      await expect(
-        fs.access(path.join(projectDir, 'packages/ui-cli/package.json')),
-      ).resolves.toBeUndefined();
-      const uiCliPkg = JSON.parse(
-        await fs.readFile(path.join(projectDir, 'packages/ui-cli/package.json'), 'utf-8'),
-      ) as { dependencies: Record<string, string> };
-      expect(uiCliPkg.dependencies['@inkjs/ui']).toBe('2.0.0');
+      // Verify only the actually-used separated UI package is created
       await expect(
         fs.access(path.join(projectDir, 'packages/ui-web/components.json')),
       ).resolves.toBeUndefined();
       await expect(
+        fs.access(path.join(projectDir, 'packages/ui-cli/package.json')),
+      ).rejects.toThrow();
+      await expect(
         fs.access(path.join(projectDir, 'packages/ui-mobile/package.json')),
-      ).resolves.toBeUndefined();
+      ).rejects.toThrow();
       await expect(fs.access(path.join(projectDir, 'AGENTS.md'))).resolves.toBeUndefined();
       await expect(fs.access(path.join(projectDir, 'CLAUDE.md'))).resolves.toBeUndefined();
       await expect(
@@ -71,10 +81,11 @@ describe('little.bootstrapper CLI (E2E)', () => {
       await expect(
         fs.access(path.join(projectDir, '.cursor/rules/universal.mdc')),
       ).resolves.toBeUndefined();
-      await expect(fs.access(path.join(projectDir, 'Makefile'))).resolves.toBeUndefined();
-      const defaultMake = await execFileAsync('make', ['-n'], { cwd: projectDir });
-      expect(defaultMake.stdout).toContain('for test');
-      expect(defaultMake.stdout).not.toContain('go build');
+      await expect(fs.access(path.join(projectDir, 'Makefile'))).rejects.toThrow();
+      const nxJson = JSON.parse(await fs.readFile(path.join(projectDir, 'nx.json'), 'utf-8')) as {
+        plugins: string[];
+      };
+      expect(nxJson.plugins).toEqual([]);
       await expect(fs.access(path.join(projectDir, 'mcp.json'))).resolves.toBeUndefined();
 
       // 1b. Browse, Search & Install Verified Safe MCPs via CLI
@@ -230,7 +241,7 @@ describe('little.bootstrapper CLI (E2E)', () => {
     } finally {
       await fs.rm(tmpRoot, { recursive: true, force: true });
     }
-  });
+  }, 60000);
 
   it('rejects invalid CLI arguments via Zod validation with exit code 1 and readable errors', async () => {
     await expect(

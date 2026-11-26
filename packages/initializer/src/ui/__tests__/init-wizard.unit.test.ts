@@ -94,11 +94,6 @@ describe('InitWizardScreen interactive flow (regression)', () => {
         await press('\r');
         await waitForOutput(getOutput, 'Root-Only Linter');
 
-        // 7. root-linter: press Enter on default ('eslint') -> must proceed to monorepo
-        await press('\r');
-        await waitForOutput(getOutput, 'Is this a Monorepo (NX)?');
-
-        // 8. monorepo: press Enter on default ('yes') -> must proceed to frameworks
         await press('\r');
         await waitForOutput(getOutput, 'Select Frameworks, Design Systems, CSS, Testing');
         expect(getOutput()).not.toContain('Use Makefiles for non-JavaScript Projects?');
