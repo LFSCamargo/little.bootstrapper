@@ -12,7 +12,6 @@ on:
 
 permissions:
   contents: write
-  id-token: write
 
 jobs:
   verify-and-release:
@@ -66,12 +65,15 @@ jobs:
             fs.writeFileSync('/tmp/release-notes.md', notes + '\n');
           "
       - name: Publish @little-bootstrapper/ui-cli & @little-bootstrapper/initializer to npm
-        if: ${{ secrets.NPM_TOKEN != '' }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          npm publish packages/ui-cli --access public --provenance
-          npm publish packages/initializer --access public --provenance
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "NPM_TOKEN not configured; skipping npm publish"
+            exit 0
+          fi
+          npm publish packages/ui-cli --access public
+          npm publish packages/initializer --access public
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
