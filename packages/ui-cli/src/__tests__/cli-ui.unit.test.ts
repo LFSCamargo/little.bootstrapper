@@ -39,8 +39,19 @@ function renderInkToString(element: React.ReactElement): string {
   stdout.on('data', (chunk: Buffer | string) => {
     chunks.push(chunk.toString());
   });
+  const stdin = new PassThrough() as PassThrough & {
+    isTTY?: boolean;
+    setRawMode?: (mode: boolean) => PassThrough;
+    ref?: () => PassThrough;
+    unref?: () => PassThrough;
+  };
+  stdin.isTTY = true;
+  stdin.setRawMode = () => stdin;
+  stdin.ref = () => stdin;
+  stdin.unref = () => stdin;
   const instance = render(React.createElement(PlanetThemeProvider, null, element), {
     stdout: stdout as unknown as NodeJS.WriteStream,
+    stdin: stdin as unknown as NodeJS.ReadStream,
     patchConsole: false,
   });
   instance.unmount();
