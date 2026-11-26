@@ -1,11 +1,19 @@
+import { scaffoldLocalValidation } from './local-validation.generator.js';
+import {
+  validateInitialization,
+  requireEmptyDestination,
+  formatGeneratedFiles,
+} from './initialization-safety.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { BootstrapConfig, Framework } from '../../types/index.js';
 import { getPinnedVersion } from '../catalog/index.js';
 import { generateUniversalAIEcosystem } from './ai-ecosystem.generator.js';
 import { generateMcpConfig } from './mcp.generator.js';
 import { generateModule } from './module.generator.js';
-import { hasNativeWorkspaces, scaffoldNativeMakefiles } from './makefile.generator.js';
+import { hasNativeWorkspaces, nativePlugins, scaffoldNativeTooling } from './native.generator.js';
+import { WorkspaceEntrySchema } from '../validation/index.js';
 import {
   isPrettierEnabled,
   resolveRootLinter,
@@ -21,7 +29,6 @@ export interface GenerationResult {
   uiPackagesCreated: ('ui-cli' | 'ui-web' | 'ui-mobile')[];
 }
 
-const CLI_FRAMEWORKS: Framework[] = ['ink'];
 const WEB_FRAMEWORKS: Framework[] = [
   'nextjs',
   'react-vite',
@@ -49,6 +56,9 @@ function renderVitestConfig(coverage: { enabled: boolean; threshold: number }): 
       enabled: true,
       provider: 'v8',
       reporter: ['text', 'lcov', 'json-summary'],
+      include: ['src/**/*.{ts,tsx}'],
+      // Entry mounting is exercised by browser E2E; application logic remains covered.
+      exclude: ['**/node_modules/**', '**/dist/**', '**/__tests__/**', 'src/main.tsx'],
       thresholds: {
         lines: ${coverage.threshold},
         statements: ${coverage.threshold},
@@ -63,10 +73,11 @@ function renderVitestConfig(coverage: { enabled: boolean; threshold: number }): 
   return `import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
+  esbuild: { jsx: 'automatic' },
   test: {
     globals: true,
     environment: 'node',
-    include: ['src/**/__tests__/**/*.test.ts', 'src/**/__tests__/**/*.test.tsx'],
+    include: ['src/**/*.test.{ts,tsx}', 'tests/**/*.test.{ts,tsx}'],
 ${coverageBlock}
   },
 });
@@ -96,21 +107,14 @@ ${thresholdBlock}
 export function resolveRequiredUiPackages(
   config: BootstrapConfig,
 ): ('ui-cli' | 'ui-web' | 'ui-mobile')[] {
-  const allFrameworks = new Set<Framework>([
-    ...config.stack.frameworks,
-    ...config.workspace.apps.map((a) => a.framework),
-    ...config.workspace.packages.map((p) => p.framework),
-  ]);
+  const appFrameworks = new Set<Framework>(config.workspace.apps.map((a) => a.framework));
 
   const required: ('ui-cli' | 'ui-web' | 'ui-mobile')[] = [];
 
-  if (CLI_FRAMEWORKS.some((f) => allFrameworks.has(f))) {
-    required.push('ui-cli');
-  }
-  if (WEB_FRAMEWORKS.some((f) => allFrameworks.has(f))) {
+  if (WEB_FRAMEWORKS.some((f) => appFrameworks.has(f))) {
     required.push('ui-web');
   }
-  if (MOBILE_FRAMEWORKS.some((f) => allFrameworks.has(f))) {
+  if (MOBILE_FRAMEWORKS.some((f) => appFrameworks.has(f))) {
     required.push('ui-mobile');
   }
 
@@ -222,7 +226,14 @@ export {
         typecheck: 'tsc --noEmit -p tsconfig.json',
       },
       dependencies: deps,
+      peerDependencies: {
+        react: getPinnedVersion('react'),
+        'react-dom': getPinnedVersion('react-dom'),
+      },
       devDependencies: {
+        react: getPinnedVersion('react'),
+        'react-dom': getPinnedVersion('react-dom'),
+        '@types/react': getPinnedVersion('@types/react'),
         typescript: getPinnedVersion('typescript'),
       },
     };
@@ -348,13 +359,86 @@ export async function generateProject(
   targetDir: string,
   config: BootstrapConfig,
 ): Promise<GenerationResult> {
+  validateInitialization(config);
+  await requireEmptyDestination(targetDir);
+  const parent = path.dirname(path.resolve(targetDir));
+  await fs.mkdir(parent, { recursive: true });
+  const staging = await fs.mkdtemp(path.join(parent, '.bootstrap-init-'));
+  try {
+    const result = await writeProject(staging, config);
+    await requireEmptyDestination(targetDir);
+    const existing = await fs.stat(targetDir).catch((error: NodeJS.ErrnoException) => {
+      if (error.code !== 'ENOENT') throw error;
+      return null;
+    });
+    if (existing) {
+      // A shell may be inside this directory. Keep its inode and publish only new files.
+      const published: string[] = [];
+      const directories: string[] = [];
+      try {
+        async function publish(directory: string): Promise<void> {
+          for (const entry of await fs.readdir(path.join(staging, directory), {
+            withFileTypes: true,
+          })) {
+            const file = path.join(directory, entry.name);
+            const destination = path.join(targetDir, file);
+            if (entry.isDirectory()) {
+              await fs.mkdir(destination);
+              directories.push(destination);
+              await publish(file);
+            } else {
+              await fs.copyFile(path.join(staging, file), destination, fs.constants.COPYFILE_EXCL);
+              published.push(destination);
+            }
+          }
+        }
+        await publish('');
+      } catch (error) {
+        for (const file of published.reverse()) await fs.unlink(file);
+        for (const directory of directories.reverse()) await fs.rmdir(directory);
+        throw error;
+      }
+    } else {
+      await fs.chmod(staging, 0o777 & ~process.umask());
+      await fs.rename(staging, targetDir);
+    }
+    return { ...result, targetDir };
+  } finally {
+    await fs.rm(staging, { recursive: true, force: true });
+  }
+}
+
+async function writeProject(targetDir: string, config: BootstrapConfig): Promise<GenerationResult> {
   config = {
     ...config,
     stack: {
       ...config.stack,
-      useMakefiles: hasNativeWorkspaces(config) || config.stack.useMakefiles,
+      languages: [
+        ...new Set([
+          ...config.stack.languages,
+          ...config.workspace.apps.map((e) => e.language),
+          ...config.workspace.packages.map((e) => e.language),
+        ]),
+      ],
+      frameworks: [
+        ...new Set([
+          'vitest' as const,
+          ...config.stack.frameworks,
+          ...config.workspace.apps.map((e) => e.framework),
+          ...config.workspace.packages.map((e) => e.framework),
+        ]),
+      ],
+      useMakefiles: false,
     },
   };
+  const hasTs = config.stack.languages.includes('typescript');
+  const useNx = config.stack.monorepo || hasNativeWorkspaces(config);
+  const names = new Set<string>();
+  for (const entry of [...config.workspace.apps, ...config.workspace.packages]) {
+    WorkspaceEntrySchema.parse(entry);
+    if (names.has(entry.name)) throw new Error(`Duplicate workspace name: ${entry.name}`);
+    names.add(entry.name);
+  }
   const filesCreated: string[] = [];
   await fs.mkdir(targetDir, { recursive: true });
 
@@ -362,6 +446,11 @@ export async function generateProject(
   const configPath = path.join(targetDir, 'bootstrap.config.json');
   await fs.writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf-8');
   filesCreated.push('bootstrap.config.json');
+  await fs.writeFile(
+    path.join(targetDir, '.gitignore'),
+    'node_modules/\ndist/\nartifacts/\ncache/\nout/\n.next/\n.nuxt/\n.output/\n.nx/\ncoverage/\ntarget/\n.env*\n!.env.example\n*.tsbuildinfo\n.yarn/install-state.gz\n',
+  );
+  filesCreated.push('.gitignore');
 
   // 2. CODEOWNERS
   if (config.project.codeowners) {
@@ -375,12 +464,18 @@ export async function generateProject(
   const prettierEnabled = isPrettierEnabled(config);
 
   // 3. Root package.json + tsconfig.json + root-only linter & prettier (if TypeScript is selected)
-  if (config.stack.languages.includes('typescript')) {
+  if (hasTs || useNx) {
     const devDeps: Record<string, string> = {
-      typescript: getPinnedVersion('typescript'),
+      ...(hasTs
+        ? {
+            typescript: getPinnedVersion('typescript'),
+            '@types/node': getPinnedVersion('@types/node'),
+          }
+        : {}),
     };
-    if (config.stack.monorepo) {
+    if (useNx) {
       devDeps.nx = getPinnedVersion('nx');
+      for (const plugin of nativePlugins(config)) devDeps[plugin] = getPinnedVersion(plugin);
     }
     if (config.stack.frameworks.includes('vitest')) {
       devDeps.vitest = getPinnedVersion('vitest');
@@ -394,8 +489,9 @@ export async function generateProject(
     if (config.stack.frameworks.includes('playwright')) {
       devDeps['@playwright/test'] = getPinnedVersion('@playwright/test');
     }
-    if (rootLinter === 'eslint' || config.stack.frameworks.includes('eslint')) {
+    if (hasTs && (rootLinter === 'eslint' || config.stack.frameworks.includes('eslint'))) {
       devDeps.eslint = getPinnedVersion('eslint');
+      devDeps['@typescript-eslint/parser'] = getPinnedVersion('@typescript-eslint/parser');
     }
     if (rootLinter === 'biome' || config.stack.frameworks.includes('biome')) {
       devDeps['@biomejs/biome'] = getPinnedVersion('@biomejs/biome');
@@ -437,16 +533,16 @@ export async function generateProject(
     const pkgJson: Record<string, unknown> = {
       name: config.project.name,
       version: '0.1.0',
-      private: config.stack.monorepo,
+      private: useNx,
       description: config.project.description,
       author: config.project.author,
       ...(config.stack.packageManager === 'yarn' ? { packageManager: 'yarn@4.19.0' } : {}),
-      ...(config.stack.monorepo && config.stack.packageManager !== 'pnpm'
+      ...(useNx && config.stack.packageManager !== 'pnpm'
         ? { workspaces: ['apps/*', 'packages/*'] }
         : {}),
       scripts: {
-        build: config.stack.monorepo ? 'nx run-many -t build' : 'tsc',
-        test: config.stack.monorepo
+        build: useNx ? 'nx run-many -t build' : 'tsc',
+        test: useNx
           ? 'nx run-many -t test'
           : config.stack.frameworks.includes('vitest')
             ? 'vitest run'
@@ -454,12 +550,18 @@ export async function generateProject(
               ? 'jest'
               : 'echo "No test runner configured"',
         ...(coverage.enabled && config.stack.frameworks.includes('vitest')
-          ? { 'test:coverage': 'vitest run --coverage' }
+          ? { 'test:coverage': useNx ? 'nx run-many -t test' : 'vitest run --coverage' }
           : coverage.enabled && config.stack.frameworks.includes('jest')
             ? { 'test:coverage': 'jest --coverage' }
             : {}),
-        typecheck: config.stack.monorepo ? 'nx run-many -t typecheck' : 'tsc --noEmit',
-        lint: lintScript,
+        typecheck: useNx ? 'nx run-many -t typecheck' : 'tsc --noEmit',
+        lint: hasTs ? lintScript : 'nx run-many -t typecheck',
+        ...(useNx
+          ? {
+              start: 'nx run-many -t start --parallel=100',
+              dev: 'nx run-many -t dev --parallel=100',
+            }
+          : {}),
         ...(prettierEnabled
           ? {
               format: 'prettier --write .',
@@ -513,15 +615,45 @@ export async function generateProject(
     }
 
     if (config.stack.packageManager === 'yarn') {
+      const yarnRelease = 'yarn-4.19.0.cjs';
+
+      const releasePaths = [
+        path.resolve(
+          path.dirname(fileURLToPath(import.meta.url)),
+          '../../../../../.yarn/releases',
+          yarnRelease,
+        ),
+        path.resolve(
+          path.dirname(fileURLToPath(import.meta.url)),
+          '../../../.yarn/releases',
+          yarnRelease,
+        ),
+      ];
+      let releaseSource: string | undefined;
+      for (const candidate of releasePaths) {
+        try {
+          await fs.access(candidate);
+          releaseSource = candidate;
+          break;
+        } catch {
+          /* ignore */
+        }
+      }
       await fs.writeFile(
         path.join(targetDir, '.yarnrc.yml'),
-        'nodeLinker: node-modules\nenableTelemetry: false\n',
-        'utf-8',
+        'nodeLinker: node-modules\nenableTelemetry: false\n' +
+          (releaseSource ? `yarnPath: .yarn/releases/${yarnRelease}\n` : ''),
       );
       filesCreated.push('.yarnrc.yml');
+      if (releaseSource) {
+        const releaseDest = path.join(targetDir, '.yarn/releases', yarnRelease);
+        await fs.mkdir(path.dirname(releaseDest), { recursive: true });
+        await fs.copyFile(releaseSource, releaseDest);
+        filesCreated.push('.yarn/releases/yarn-4.19.0.cjs');
+      }
     }
 
-    if (config.stack.monorepo && config.stack.packageManager === 'pnpm') {
+    if (useNx && config.stack.packageManager === 'pnpm') {
       await fs.writeFile(
         path.join(targetDir, 'pnpm-workspace.yaml'),
         'packages:\n  - "apps/*"\n  - "packages/*"\n',
@@ -530,10 +662,18 @@ export async function generateProject(
       filesCreated.push('pnpm-workspace.yaml');
     }
 
-    if (config.stack.monorepo) {
+    if (useNx) {
       const nxJson = {
         $schema: './node_modules/nx/schemas/nx-schema.json',
         defaultBase: 'main',
+        plugins: nativePlugins(config),
+        targetDefaults: {
+          build: { dependsOn: ['^build'] },
+          typecheck: { dependsOn: ['^build'] },
+          test: { dependsOn: ['^build'] },
+          dev: { dependsOn: ['^build'] },
+          start: { dependsOn: ['build'] },
+        },
       };
       await fs.writeFile(
         path.join(targetDir, 'nx.json'),
@@ -594,9 +734,11 @@ export async function generateProject(
   }
 
   // 7. Initialized Workspace Packages & Apps (Contracts, Backend Health Endpoint, Web Sample App)
-  const hasContracts = config.workspace.packages.some(
-    (p) => p.kind === 'contracts' || p.name === 'contracts',
+  const scope = `@${config.project.name}`;
+  const tsContractsPkg = config.workspace.packages.find(
+    (p) => (p.kind === 'contracts' || p.name === 'contracts') && p.language === 'typescript',
   );
+  const contractsPkgName = tsContractsPkg ? `${scope}/${tsContractsPkg.name}` : null;
   const hasUiWeb = uiPackagesCreated.includes('ui-web');
 
   for (const pkg of config.workspace.packages) {
@@ -608,20 +750,42 @@ export async function generateProject(
   }
 
   for (const app of config.workspace.apps) {
-    const appFiles = await scaffoldWorkspaceApp(targetDir, app, config, hasContracts, hasUiWeb);
+    const appFiles = await scaffoldWorkspaceApp(targetDir, app, config, contractsPkgName, hasUiWeb);
     filesCreated.push(...appFiles);
   }
 
-  filesCreated.push(...(await scaffoldNativeMakefiles(targetDir, config)));
+  for (const bucket of ['apps', 'packages'] as const) {
+    for (const entry of config.workspace[bucket]) {
+      const base = `${bucket}/${entry.name}`;
+      const manifest = await fs
+        .readFile(path.join(targetDir, base, 'package.json'), 'utf8')
+        .catch(() => null);
+      if (manifest && JSON.parse(manifest).scripts?.test === 'vitest run') {
+        if (!filesCreated.includes(`${base}/vitest.config.ts`))
+          await fs.writeFile(
+            path.join(targetDir, base, 'vitest.config.ts'),
+            "export { default } from '../../vitest.config.js';\n",
+          );
+        filesCreated.push(`${base}/vitest.config.ts`);
+      }
+    }
+  }
+  filesCreated.push(...(await scaffoldNativeTooling(targetDir, config)));
 
   // 7b. External Bootstrap & Delivery Pipeline + Architecture Documentation
   const pipelineFiles = await scaffoldExternalPipeline(targetDir, config, uiPackagesCreated);
   filesCreated.push(...pipelineFiles);
 
-  // 8. Example module following architecture & naming conventions
+  // 8. Example health module following architecture & naming conventions
   if (config.architecture.exampleModule) {
     const primaryLang = config.stack.languages[0] ?? 'typescript';
-    const exampleFiles = await generateModule(targetDir, 'planet-delivery', config, primaryLang);
+    const exampleWorkspace =
+      config.workspace.apps.find((entry) => entry.kind === 'backend') ??
+      config.workspace.apps[0] ??
+      config.workspace.packages.find((entry) => entry.language !== 'solidity');
+    const exampleFiles = exampleWorkspace
+      ? await generateModule(targetDir, 'health', config, primaryLang, exampleWorkspace.name)
+      : [];
     filesCreated.push(...exampleFiles);
   }
 
@@ -651,9 +815,21 @@ export async function generateProject(
       ? `      - run: ${config.stack.packageManager} test:coverage\n`
       : '';
   const runCmd = config.stack.packageManager === 'npm' ? 'npm run' : config.stack.packageManager;
+  const nativeCiSteps = `${config.stack.languages.includes('golang') ? "      - uses: actions/setup-go@v5\n        with:\n          go-version: '1.23.x'\n          cache: false\n" : ''}${config.stack.languages.includes('rust') ? '      - uses: dtolnay/rust-toolchain@stable\n' : ''}${config.stack.frameworks.includes('foundry') ? '      - uses: foundry-rs/foundry-toolchain@v1\n' : ''}`;
   await fs.writeFile(
     path.join(workflowsDir, 'pr-validation.yml'),
-    `name: PR Validation & Pattern Gate\non:\n  pull_request:\n    branches: [main]\njobs:\n  validate:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-node@v4\n        with:\n          node-version: '22'\n      - run: ${config.stack.packageManager} install\n${prettierEnabled ? `      - run: ${runCmd} format:check\n` : ''}${rootLinter !== 'none' ? `      - run: ${runCmd} lint\n` : ''}      - run: ${runCmd} typecheck\n      - run: ${runCmd} build\n      - run: ${runCmd} test\n      - run: npx little-bootstrapper validate\n${coverageCiStep}`,
+    `name: PR Validation & Pattern Gate\non:\n  pull_request:\n    branches: [main]\njobs:\n  validate:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-node@v4\n        with:\n          node-version: '22'\n${nativeCiSteps}${config.stack.packageManager === 'yarn' ? '      - run: corepack enable\n' : ''}      - run: ${config.stack.packageManager} install\n${
+      config.stack.languages.includes('golang')
+        ? config.workspace.apps
+            .concat(config.workspace.packages)
+            .filter((e) => e.language === 'golang')
+            .map(
+              (e) =>
+                `      - run: go mod tidy\n        working-directory: ${config.workspace.apps.includes(e) ? 'apps' : 'packages'}/${e.name}\n`,
+            )
+            .join('')
+        : ''
+    }${prettierEnabled ? `      - run: ${runCmd} format:check\n` : ''}${rootLinter !== 'none' ? `      - run: ${runCmd} lint\n` : ''}      - run: ${runCmd} typecheck\n      - run: ${runCmd} build\n      - run: ${runCmd} test\n      - run: node scripts/validate.mjs\n${coverageCiStep}`,
     'utf-8',
   );
   await fs.writeFile(
@@ -690,7 +866,7 @@ Run the standalone delivery pipeline outside the CLI:
 
 See [docs/PIPELINE.md](./docs/PIPELINE.md) for full pipeline stages, root-only linting, and workspace verification.
 
-${hasNativeWorkspaces(config) ? '## Native workspace commands\n\nEvery native workspace has a Makefile with build, start, dev, and test targets. Bare make runs tests. From the root, make build / make test aggregate native workspaces, make start runs executables or local contract nodes, and make dev runs development commands in parallel. Use make <command>-apps-<name> or make <command>-packages-<name> to target one workspace. Libraries have no runnable start target; their dev target runs tests. JavaScript workspaces retain package-manager commands.\n' : ''}
+${hasNativeWorkspaces(config) ? '## Native workspace commands\n\nInstall Go / Rust / Foundry as needed, then install workspace dependencies. Nx orchestrates all languages without Makefiles. Run nx run-many -t build / test or nx run <project>:start. Go uses @nx-go/nx-go with go.work; Rust uses @monodon/rust with a root Cargo workspace; Foundry runs forge and anvil through nx:run-commands. Libraries expose build/test/typecheck targets only. Run go mod tidy in Go workspaces before the first build to populate go.sum.\n' : ''}
 
 ## Stack
 
@@ -714,6 +890,9 @@ ${pkgsDoc || '- None'}
 `;
   await fs.writeFile(path.join(targetDir, 'README.md'), readme, 'utf-8');
   filesCreated.push('README.md');
+
+  filesCreated.push(...(await scaffoldLocalValidation(targetDir)));
+  await formatGeneratedFiles(targetDir, filesCreated);
 
   return { targetDir, filesCreated, uiPackagesCreated };
 }

@@ -30,8 +30,8 @@ function renderRuleMarkdown(ruleId: MarketplaceRuleId, config?: BootstrapConfig)
 - Strict Boundaries: \`${config.architecture.strictBoundaries}\`
 - Path Aliases: \`${config.architecture.pathAliases}\`
 - Barrel Exports: \`${config.architecture.barrelExports}\`
-- Separated UI Packages: \`packages/ui-cli\`, \`packages/ui-web\`, \`packages/ui-mobile\` (only what this stack uses)
-- Native workspaces must have Makefiles with build, start, dev, and test targets, test as the default, and forwarding from the root Makefile.
+- Separated UI Packages: \`packages/ui-web\` and \`packages/ui-mobile\` (only what this stack uses); CLI UI components live inside the Ink app.
+- Native workspaces (Go, Rust, Solidity) are orchestrated through Nx plugins: @nx-go/nx-go for Go with go.work, @monodon/rust for Rust with a root Cargo workspace, and nx:run-commands for Foundry/Hardhat. Each native project exposes build, test, typecheck, and (for apps) start/dev targets.
 - **Atomic Unit Isolation**: \`src/commands/\`, \`src/modules/\`, \`src/ui/screens/\`, \`src/types/\`, \`src/assets/\` with barrel-only cross-module imports.
 `;
   }

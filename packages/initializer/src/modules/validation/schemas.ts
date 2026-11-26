@@ -135,12 +135,23 @@ export const ModuleNameSchema = z
     'Module name must start with alphanumeric and contain no spaces',
   );
 
-export const WorkspaceEntrySchema = z.object({
-  name: WorkspaceNameSchema,
-  language: LanguageSchema,
-  framework: FrameworkSchema,
-  kind: WorkspaceKindSchema.optional(),
-});
+export const WorkspaceEntrySchema = z
+  .object({
+    name: WorkspaceNameSchema,
+    language: LanguageSchema,
+    framework: FrameworkSchema,
+    kind: WorkspaceKindSchema.optional(),
+  })
+  .superRefine((entry, ctx) => {
+    const framework = FRAMEWORKS.find((fw) => fw.id === entry.framework);
+    if (framework?.language && framework.language !== entry.language) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['framework'],
+        message: `Framework ${entry.framework} is incompatible with ${entry.language}`,
+      });
+    }
+  });
 
 export const ArchitectureConfigSchema = z.object({
   pattern: ArchitecturePatternSchema,
@@ -218,6 +229,19 @@ export const InitCommandArgsSchema = z
     outDir: z.string().min(1),
   })
   .superRefine((data, ctx) => {
+    for (const framework of FRAMEWORKS) {
+      if (
+        data.frameworks.includes(framework.id) &&
+        framework.language &&
+        !data.languages.includes(framework.language)
+      ) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['frameworks'],
+          message: `Framework "${framework.id}" requires language "${framework.language}"`,
+        });
+      }
+    }
     if (data.frameworks.includes('elysia') && data.packageManager !== 'bun') {
       ctx.addIssue({
         code: 'custom',

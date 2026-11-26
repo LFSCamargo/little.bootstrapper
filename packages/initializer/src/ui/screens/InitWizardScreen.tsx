@@ -1,3 +1,4 @@
+import { UNSUPPORTED_TEMPLATES } from '../../modules/generators/initialization-safety.js';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Text, useApp, useInput } from 'ink';
 import TextInput from 'ink-text-input';
@@ -48,6 +49,9 @@ import {
   getCompatibleFrameworks,
   getFrameworksForWorkspace,
   recommendMcpsForProject,
+  reconcileWorkspaces,
+  defaultWorkspaces,
+  recommendedFrameworks,
   resolveRulesForProject,
 } from '../../modules/catalog/index.js';
 import {
@@ -81,7 +85,6 @@ type InitStep =
   | 'languages'
   | 'package-manager'
   | 'root-linter'
-  | 'monorepo'
   | 'frameworks'
   | 'domains'
   | 'tools'
@@ -111,7 +114,7 @@ type InitStep =
   | 'generating'
   | 'done';
 
-const TOTAL_STEPS = 22;
+const TOTAL_STEPS = 21;
 
 const STEP_INDEX: Record<InitStep, number> = {
   'repo-name': 1,
@@ -121,35 +124,34 @@ const STEP_INDEX: Record<InitStep, number> = {
   languages: 5,
   'package-manager': 6,
   'root-linter': 7,
-  monorepo: 8,
-  frameworks: 9,
-  domains: 10,
-  tools: 11,
-  agents: 12,
-  mcps: 13,
-  'apps-packages': 14,
-  'add-app-name': 14,
-  'add-app-kind': 14,
-  'add-app-lang': 14,
-  'add-app-fw': 14,
-  'add-pkg-name': 14,
-  'add-pkg-kind': 14,
-  'add-pkg-lang': 14,
-  'add-pkg-fw': 14,
-  'edit-ws-select': 14,
-  'edit-ws-lang': 14,
-  'edit-ws-fw': 14,
-  'remove-ws-select': 14,
-  'arch-pattern': 15,
-  'folder-org': 16,
-  'file-naming': 17,
-  'test-org': 18,
-  'coverage-enabled': 19,
-  'coverage-threshold': 20,
-  'arch-options': 21,
-  preview: 22,
-  generating: 22,
-  done: 22,
+  frameworks: 8,
+  domains: 9,
+  tools: 10,
+  agents: 11,
+  mcps: 12,
+  'apps-packages': 13,
+  'add-app-name': 13,
+  'add-app-kind': 13,
+  'add-app-lang': 13,
+  'add-app-fw': 13,
+  'add-pkg-name': 13,
+  'add-pkg-kind': 13,
+  'add-pkg-lang': 13,
+  'add-pkg-fw': 13,
+  'edit-ws-select': 13,
+  'edit-ws-lang': 13,
+  'edit-ws-fw': 13,
+  'remove-ws-select': 13,
+  'arch-pattern': 14,
+  'folder-org': 15,
+  'file-naming': 16,
+  'test-org': 17,
+  'coverage-enabled': 18,
+  'coverage-threshold': 19,
+  'arch-options': 20,
+  preview: 21,
+  generating: 21,
+  done: 21,
 };
 
 const MULTISELECT_STEPS = new Set<InitStep>([
@@ -186,29 +188,21 @@ export const InitWizardScreen: React.FC<InitWizardScreenProps> = ({
   const [languages, setLanguages] = useState<Language[]>(['typescript']);
   const [packageManager, setPackageManager] = useState<PackageManager>('yarn');
   const [rootLinter, setRootLinter] = useState<RootLinter>('eslint');
-  const [monorepo, setMonorepo] = useState(true);
-  const [useMakefiles, setUseMakefiles] = useState(false);
-  const [frameworks, setFrameworks] = useState<Framework[]>([
-    'hono',
-    'nextjs',
-    'ink',
-    'vitest',
-    'shadcn',
-    'aceternity-ui',
-  ]);
+  const monorepo = true;
+  const useMakefiles = false;
+  const [frameworks, setFrameworks] = useState<Framework[]>(recommendedFrameworks(['typescript']));
   const [tools, setTools] = useState<AdditionalTool[]>(
     ADDITIONAL_TOOLS.map((t) => t.id).filter((id) => id !== 'financial-audit'),
   );
   const [domains, setDomains] = useState<ProjectDomain[]>(['general']);
   const [agents, setAgents] = useState<AIAgent[]>(AI_AGENTS.map((a) => a.id));
   const [mcps, setMcps] = useState<McpServerId[]>(DEFAULT_VERIFIED_MCPS);
-  const [apps, setApps] = useState<WorkspaceEntry[]>([
-    { name: 'api', language: 'typescript', framework: 'hono', kind: 'backend' },
-    { name: 'web', language: 'typescript', framework: 'nextjs', kind: 'web' },
-  ]);
-  const [packages, setPackages] = useState<WorkspaceEntry[]>([
-    { name: 'contracts', language: 'typescript', framework: 'vitest', kind: 'contracts' },
-  ]);
+  const [apps, setApps] = useState<WorkspaceEntry[]>(
+    () => defaultWorkspaces(languages, frameworks, packageManager).apps,
+  );
+  const [packages, setPackages] = useState<WorkspaceEntry[]>(
+    () => defaultWorkspaces(languages, frameworks, packageManager).packages,
+  );
   const [draftName, setDraftName] = useState('');
   const [draftKind, setDraftKind] = useState<WorkspaceKind>('backend');
   const [draftLang, setDraftLang] = useState<Language>('typescript');
@@ -320,9 +314,21 @@ export const InitWizardScreen: React.FC<InitWizardScreenProps> = ({
   const compatibleFrameworks = useMemo(
     () =>
       getCompatibleFrameworks(languages, packageManager).filter(
-        (fw) => fw.category !== 'Lint/Format',
+        (fw) =>
+          fw.category !== 'Lint/Format' && fw.id !== 'jest' && !UNSUPPORTED_TEMPLATES.has(fw.id),
       ),
     [languages, packageManager],
+  );
+  const workspaceFrameworks = (language: Language, kind: WorkspaceKind) =>
+    getFrameworksForWorkspace(language, packageManager, kind).filter((fw) =>
+      compatibleFrameworks.some((candidate) => candidate.id === fw.id),
+    );
+  const availableKinds = WORKSPACE_KINDS.filter((kind) =>
+    languages.some((language) => workspaceFrameworks(language, kind.id).length > 0),
+  );
+  const availableLanguages = LANGUAGES.filter(
+    (language) =>
+      languages.includes(language.id) && workspaceFrameworks(language.id, draftKind).length > 0,
   );
   const compatiblePatterns = useMemo(
     () => getCompatibleArchitecturePatterns(languages, frameworks),
@@ -606,8 +612,17 @@ export const InitWizardScreen: React.FC<InitWizardScreenProps> = ({
             initialSelected={languages}
             onBack={goBack}
             onSubmit={(selected) => {
+              const compatible = getCompatibleFrameworks(selected, packageManager);
+              setFrameworks((previous) => [
+                ...new Set([
+                  ...previous.filter((id) => compatible.some((fw) => fw.id === id)),
+                  ...recommendedFrameworks(
+                    selected.filter((language) => !languages.includes(language)),
+                  ),
+                ]),
+              ]);
               setLanguages(selected);
-              goTo(selected.includes('typescript') ? 'package-manager' : 'monorepo');
+              goTo(selected.includes('typescript') ? 'package-manager' : 'frameworks');
             }}
           />
         </Box>
@@ -641,29 +656,6 @@ export const InitWizardScreen: React.FC<InitWizardScreenProps> = ({
             }))}
             onChange={(value) => {
               setRootLinter(value as RootLinter);
-              goTo('monorepo');
-            }}
-          />
-        </Box>
-      )}
-
-      {step === 'monorepo' && (
-        <Box flexDirection="column">
-          <Text bold>Is this a Monorepo (NX)?</Text>
-          <Select
-            defaultValue={monorepo ? 'yes' : 'no'}
-            options={[
-              {
-                label: 'Yes — NX Monorepo (with separated ui-cli / ui-web / ui-mobile)',
-                value: 'yes',
-              },
-              { label: 'No — Single Package', value: 'no' },
-            ]}
-            onChange={(value) => {
-              const isMono = value === 'yes';
-              setMonorepo(isMono);
-              const hasNonJs = languages.some((l) => l !== 'typescript');
-              setUseMakefiles(hasNonJs);
               goTo('frameworks');
             }}
           />
@@ -689,6 +681,25 @@ export const InitWizardScreen: React.FC<InitWizardScreenProps> = ({
             onBack={goBack}
             onSubmit={(selected) => {
               setFrameworks(selected);
+              const defaults = defaultWorkspaces(languages, selected, packageManager);
+              const update = (previous: WorkspaceEntry[], suggested: WorkspaceEntry[]) => {
+                const entries = reconcileWorkspaces(previous, languages, selected, packageManager);
+                for (const entry of suggested) {
+                  if (
+                    !entries.some(
+                      (existing) =>
+                        existing.name === entry.name ||
+                        (existing.kind === entry.kind &&
+                          existing.language === entry.language &&
+                          existing.framework === entry.framework),
+                    )
+                  )
+                    entries.push(entry);
+                }
+                return entries;
+              };
+              setApps((prev) => update(prev, defaults.apps));
+              setPackages((prev) => update(prev, defaults.packages));
               goTo('domains');
             }}
           />
@@ -809,7 +820,9 @@ export const InitWizardScreen: React.FC<InitWizardScreenProps> = ({
               ...(apps.length + packages.length > 0
                 ? [{ label: '🛠️  Select Tech for an Existing App / Package', value: 'edit-ws' }]
                 : []),
-              { label: '➕ Add Application (apps/<name> + tech)', value: 'add-app' },
+              ...(availableKinds.some((k) => ['backend', 'web', 'cli', 'mobile'].includes(k.id))
+                ? [{ label: '➕ Add Application (apps/<name> + tech)', value: 'add-app' }]
+                : []),
               { label: '📦 Add Package (packages/<name> + tech)', value: 'add-pkg' },
               ...(apps.length + packages.length > 0
                 ? [{ label: '🗑️  Remove an App / Package', value: 'remove-ws' }]
@@ -856,6 +869,13 @@ export const InitWizardScreen: React.FC<InitWizardScreenProps> = ({
                   setInputError(formatZodError(res.error));
                   return;
                 }
+                if (
+                  [...apps, ...packages].some((entry) => entry.name === res.data) ||
+                  ['ui-web', 'ui-mobile', 'ui-cli'].includes(res.data)
+                ) {
+                  setInputError('Choose a unique workspace name. UI package names are reserved.');
+                  return;
+                }
                 setDraftName(res.data);
                 goTo('add-app-kind');
               }}
@@ -870,9 +890,9 @@ export const InitWizardScreen: React.FC<InitWizardScreenProps> = ({
           <Text bold>Role / Skeleton for apps/{draftName}:</Text>
           <Select
             defaultValue={draftKind}
-            options={WORKSPACE_KINDS.filter((k) =>
-              ['backend', 'web', 'cli', 'mobile'].includes(k.id),
-            ).map((k) => ({ label: `${k.label} — ${k.description}`, value: k.id }))}
+            options={availableKinds
+              .filter((k) => ['backend', 'web', 'cli', 'mobile'].includes(k.id))
+              .map((k) => ({ label: `${k.label} — ${k.description}`, value: k.id }))}
             onChange={(value) => {
               setDraftKind(value as WorkspaceKind);
               goTo('add-app-lang');
@@ -886,7 +906,7 @@ export const InitWizardScreen: React.FC<InitWizardScreenProps> = ({
           <Text bold>Language for apps/{draftName}:</Text>
           <Select
             defaultValue={draftLang}
-            options={LANGUAGES.filter((l) => languages.includes(l.id)).map((l) => ({
+            options={availableLanguages.map((l) => ({
               label: `${l.label} — ${l.description}`,
               value: l.id,
             }))}
@@ -905,7 +925,7 @@ export const InitWizardScreen: React.FC<InitWizardScreenProps> = ({
           </Text>
           <Select
             visibleOptionCount={6}
-            options={getFrameworksForWorkspace(draftLang, packageManager, draftKind).map((fw) => ({
+            options={workspaceFrameworks(draftLang, draftKind).map((fw) => ({
               label: `${fw.label} — ${fw.description}`,
               value: fw.id,
             }))}
@@ -941,6 +961,13 @@ export const InitWizardScreen: React.FC<InitWizardScreenProps> = ({
                   setInputError(formatZodError(res.error));
                   return;
                 }
+                if (
+                  [...apps, ...packages].some((entry) => entry.name === res.data) ||
+                  ['ui-web', 'ui-mobile', 'ui-cli'].includes(res.data)
+                ) {
+                  setInputError('Choose a unique workspace name. UI package names are reserved.');
+                  return;
+                }
                 setDraftName(res.data);
                 goTo('add-pkg-kind');
               }}
@@ -955,9 +982,9 @@ export const InitWizardScreen: React.FC<InitWizardScreenProps> = ({
           <Text bold>Role / Skeleton for packages/{draftName}:</Text>
           <Select
             defaultValue={draftKind}
-            options={WORKSPACE_KINDS.filter((k) =>
-              ['contracts', 'library', 'cli'].includes(k.id),
-            ).map((k) => ({ label: `${k.label} — ${k.description}`, value: k.id }))}
+            options={availableKinds
+              .filter((k) => ['contracts', 'library', 'cli'].includes(k.id))
+              .map((k) => ({ label: `${k.label} — ${k.description}`, value: k.id }))}
             onChange={(value) => {
               setDraftKind(value as WorkspaceKind);
               goTo('add-pkg-lang');
@@ -971,7 +998,7 @@ export const InitWizardScreen: React.FC<InitWizardScreenProps> = ({
           <Text bold>Language for packages/{draftName}:</Text>
           <Select
             defaultValue={draftLang}
-            options={LANGUAGES.filter((l) => languages.includes(l.id)).map((l) => ({
+            options={availableLanguages.map((l) => ({
               label: `${l.label} — ${l.description}`,
               value: l.id,
             }))}
@@ -990,7 +1017,7 @@ export const InitWizardScreen: React.FC<InitWizardScreenProps> = ({
           </Text>
           <Select
             visibleOptionCount={6}
-            options={getFrameworksForWorkspace(draftLang, packageManager, draftKind).map((fw) => ({
+            options={workspaceFrameworks(draftLang, draftKind).map((fw) => ({
               label: `${fw.label} — ${fw.description}`,
               value: fw.id,
             }))}
@@ -1058,7 +1085,7 @@ export const InitWizardScreen: React.FC<InitWizardScreenProps> = ({
           </Text>
           <Select
             defaultValue={draftLang}
-            options={LANGUAGES.filter((l) => languages.includes(l.id)).map((l) => ({
+            options={availableLanguages.map((l) => ({
               label: `${l.label} — ${l.description}`,
               value: l.id,
             }))}
@@ -1086,7 +1113,7 @@ export const InitWizardScreen: React.FC<InitWizardScreenProps> = ({
                 ? apps[editingTarget.index]?.framework
                 : packages[editingTarget.index]?.framework
             }
-            options={getFrameworksForWorkspace(draftLang, packageManager, draftKind).map((fw) => ({
+            options={workspaceFrameworks(draftLang, draftKind).map((fw) => ({
               label: `${fw.label} — ${fw.description}`,
               value: fw.id,
             }))}

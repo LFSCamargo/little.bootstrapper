@@ -665,7 +665,9 @@ export function getFrameworksForWorkspace(
   } else if (kind === 'cli') {
     filtered = compatible.filter((fw) => CLI_FW_IDS.has(fw.id));
   } else if (kind === 'contracts' || kind === 'library') {
-    filtered = compatible.filter((fw) => LIBRARY_FW_IDS.has(fw.id));
+    filtered = compatible.filter(
+      (fw) => LIBRARY_FW_IDS.has(fw.id) || (language !== 'typescript' && BACKEND_FW_IDS.has(fw.id)),
+    );
   }
-  return filtered.length > 0 ? filtered : compatible;
+  return filtered;
 }

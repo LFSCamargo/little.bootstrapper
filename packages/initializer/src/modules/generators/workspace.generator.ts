@@ -1,3 +1,7 @@
+import { scaffoldHexagonalBackend } from './backend-layout.generator.js';
+import { scaffoldWebHealthPanel } from './health-panel.generator.js';
+import { scaffoldViteEntry } from './vite-app.generator.js';
+import { rustPackageName, scaffoldRustContracts } from './rust-contracts.generator.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import type {
@@ -9,7 +13,12 @@ import type {
   WorkspaceKind,
 } from '../../types/index.js';
 import { getPinnedVersion } from '../catalog/index.js';
-import { nativeTargets } from './makefile.generator.js';
+import {
+  GO_HEALTH_RESPONSE,
+  renderGoBackend,
+  renderRustBackend,
+} from './native-backend.generator.js';
+import { nativeTargets } from './native.generator.js';
 
 const BACKEND_FRAMEWORKS = new Set<Framework>([
   'hono',
@@ -54,29 +63,58 @@ export function inferWorkspaceKind(
 }
 
 function getWorkspaceDepVersion(pm: BootstrapConfig['stack']['packageManager']): string {
-  return pm === 'npm' ? '*' : 'workspace:*';
+  return pm === 'npm' ? '0.1.0' : 'workspace:*';
 }
 
 function buildProjectJson(
   scope: string,
   name: string,
   kind: 'application' | 'library',
-  isTs: boolean,
+  isTs: boolean | WorkspaceEntry,
 ): Record<string, unknown> {
+  const native = typeof isTs === 'object' && isTs.language !== 'typescript';
+  const projectName = native
+    ? isTs.language === 'rust'
+      ? rustPackageName(scope.slice(1), name)
+      : name
+    : `${scope}/${name}`;
+  const relBase = `${kind === 'application' ? 'apps' : 'packages'}/${name}`;
   return {
-    name: `${scope}/${name}`,
+    name: projectName,
     projectType: kind,
-    sourceRoot: `${kind === 'application' ? 'apps' : 'packages'}/${name}/src`,
-    targets: isTs
-      ? {
-          build: { executor: 'nx:run-commands', options: { command: 'tsc -p tsconfig.json' } },
-          typecheck: {
-            executor: 'nx:run-commands',
-            options: { command: 'tsc --noEmit -p tsconfig.json' },
-          },
-          test: { executor: 'nx:run-commands', options: { command: 'vitest run' } },
-        }
-      : nativeTargets(`${kind === 'application' ? 'apps' : 'packages'}/${name}`),
+    sourceRoot: native ? relBase : `${relBase}/src`,
+    targets:
+      isTs === true || (typeof isTs === 'object' && !native)
+        ? {
+            build: {
+              executor: 'nx:run-commands',
+              options: {
+                command: 'npm run build',
+                cwd: `${kind === 'application' ? 'apps' : 'packages'}/${name}`,
+              },
+            },
+            typecheck: {
+              executor: 'nx:run-commands',
+              options: {
+                command: 'npm run typecheck',
+                cwd: `${kind === 'application' ? 'apps' : 'packages'}/${name}`,
+              },
+            },
+            test: {
+              executor: 'nx:run-commands',
+              options: {
+                command: 'npm test',
+                cwd: `${kind === 'application' ? 'apps' : 'packages'}/${name}`,
+              },
+            },
+          }
+        : typeof isTs === 'object'
+          ? nativeTargets(
+              `${kind === 'application' ? 'apps' : 'packages'}/${name}`,
+              isTs,
+              kind === 'application' && isTs.kind !== 'library',
+            )
+          : {},
   };
 }
 
@@ -120,7 +158,7 @@ export async function scaffoldRootTooling(
     );
     await fs.writeFile(
       path.join(targetDir, '.prettierignore'),
-      `node_modules\ndist\n.next\ncoverage\n.nx\n*.lock\n`,
+      `node_modules\ndist\n.next\n.nuxt\n.output\ncoverage\n.nx\ntarget\n.yarn\n*.lock\npnpm-lock.yaml\npackage-lock.json\nartifacts\ncache\nout\n`,
       'utf-8',
     );
     created.push('.prettierrc', '.prettierignore');
@@ -131,13 +169,16 @@ export async function scaffoldRootTooling(
     await fs.writeFile(
       path.join(targetDir, 'eslint.config.mjs'),
       `// Root-only ESLint flat configuration for ${config.project.name}
+import tsParser from '@typescript-eslint/parser';
 export default [
   {
-    ignores: ['**/dist/**', '**/.next/**', '**/coverage/**', '**/node_modules/**'],
+    ignores: ['**/dist/**', '**/.next/**', '**/.nuxt/**', '**/.output/**', '**/target/**', '**/artifacts/**', '**/cache/**', '**/out/**', '**/coverage/**', '**/node_modules/**', '.yarn/**', '**/next-env.d.ts'],
   },
   {
     files: ['apps/**/*.{ts,tsx,js,mjs}', 'packages/**/*.{ts,tsx,js,mjs}'],
     languageOptions: {
+      parser: tsParser,
+      parserOptions: { ecmaFeatures: { jsx: true } },
       ecmaVersion: 2022,
       sourceType: 'module',
     },
@@ -287,7 +328,7 @@ import {
   HEALTH_ENDPOINT_PATH,
   HealthResponseSchema,
   createHealthPayload,
-} from '../health.contract.js';
+} from '../index.js';
 
 describe('${scope}/${pkg.name} sample contract', () => {
   it('creates and validates a compliant health response payload', () => {
@@ -503,113 +544,126 @@ serve({ fetch: createApp().fetch, port }, () => {
   };
 }
 
+function renderBackendHttpTest(framework: Framework): string {
+  if (framework === 'express' || framework === 'koa')
+    return `
+  it('serves health over HTTP and returns 404 for missing routes', async () => {
+    const server = createApp().listen(0, '127.0.0.1');
+    await new Promise<void>((resolve) => server.once('listening', resolve));
+    try {
+      const address = server.address();
+      if (!address || typeof address === 'string') throw new Error('Missing server address');
+      const url = \`http://127.0.0.1:\${address.port}\`;
+      expect((await fetch(\`\${url}/health\`)).status).toBe(200);
+      expect((await fetch(\`\${url}/missing\`)).status).toBe(404);
+    } finally { await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve())); }
+  });`;
+  if (framework === 'fastify')
+    return `
+  it('serves health and missing routes', async () => {
+    const app = createApp();
+    try { expect((await app.inject({ method: 'GET', url: '/health' })).statusCode).toBe(200); expect((await app.inject({ method: 'GET', url: '/missing' })).statusCode).toBe(404); }
+    finally { await app.close(); }
+  });`;
+  return `
+  it('serves health and missing routes', async () => {
+    const app = createApp();
+    const response = await app.${framework === 'elysia' ? 'handle' : 'request'}(new Request('http://localhost/health'));
+    expect(response.status).toBe(200);
+    expect((await response.json() as { status: string }).status).toBe('ok');
+    expect((await app.${framework === 'elysia' ? 'handle' : 'request'}(new Request('http://localhost/missing'))).status).toBe(404);
+  });`;
+}
+
 async function scaffoldBackendApp(
   appDir: string,
   relBase: string,
   app: WorkspaceEntry,
   config: BootstrapConfig,
-  hasContracts: boolean,
+  contractsPkgName: string | null,
 ): Promise<string[]> {
   const created: string[] = [];
   const scope = `@${config.project.name}`;
   const serviceName = `${config.project.name}-${app.name}`;
 
-  if (app.language === 'golang') {
-    await fs.mkdir(appDir, { recursive: true });
-    await fs.writeFile(
-      path.join(appDir, 'go.mod'),
-      `module github.com/${config.project.author}/${config.project.name}/apps/${app.name}\n\ngo 1.23\n`,
-      'utf-8',
-    );
-    await fs.writeFile(
-      path.join(appDir, 'main.go'),
-      `package main
-
-import (
-\t"encoding/json"
-\t"log"
-\t"net/http"
-\t"time"
-)
-
-type HealthResponse struct {
-\tStatus    string \`json:"status"\`
-\tService   string \`json:"service"\`
-\tVersion   string \`json:"version"\`
-\tTimestamp string \`json:"timestamp"\`
-}
-
-func healthHandler(w http.ResponseWriter, _ *http.Request) {
-\tw.Header().Set("Content-Type", "application/json")
-\t_ = json.NewEncoder(w).Encode(HealthResponse{
-\t\tStatus:    "ok",
-\t\tService:   "${serviceName}",
-\t\tVersion:   "0.1.0",
-\t\tTimestamp: time.Now().UTC().Format(time.RFC3339),
-\t})
-}
-
-func main() {
-\thttp.HandleFunc("/health", healthHandler)
-\tlog.Println("[${serviceName}] listening on :4000/health (${app.framework})")
-\tlog.Fatal(http.ListenAndServe(":4000", nil))
-}
-`,
-      'utf-8',
-    );
-    await fs.writeFile(
-      path.join(appDir, 'project.json'),
-      `${JSON.stringify(buildProjectJson(scope, app.name, 'application', false), null, 2)}\n`,
-      'utf-8',
-    );
-    await fs.writeFile(
-      path.join(appDir, 'README.md'),
-      `# ${app.name}\n\nGo (${app.framework}) Backend Service exposing \`GET /health\`.\n`,
-      'utf-8',
-    );
-    created.push(
-      `${relBase}/go.mod`,
-      `${relBase}/main.go`,
-      `${relBase}/project.json`,
-      `${relBase}/README.md`,
-    );
-    return created;
-  }
-
-  if (app.language === 'rust') {
+  if (app.language === 'golang' || app.language === 'rust') {
+    const go = app.language === 'golang';
     await fs.mkdir(path.join(appDir, 'src'), { recursive: true });
-    await fs.writeFile(
-      path.join(appDir, 'Cargo.toml'),
-      `[package]\nname = "${serviceName}"\nversion = "0.1.0"\nedition = "2021"\n`,
-      'utf-8',
+    const goContracts = config.workspace.packages.find(
+      (pkg) => pkg.language === 'golang' && (pkg.kind === 'contracts' || pkg.name === 'contracts'),
     );
-    await fs.writeFile(
-      path.join(appDir, 'src', 'main.rs'),
-      `pub fn health_json() -> &'static str {\n    r#"{"status":"ok","service":"${serviceName}","version":"0.1.0"}"#\n}\n\nfn main() {\n    println!("[${serviceName}] (${app.framework}) GET /health => {}", health_json());\n}\n`,
-      'utf-8',
+    const goBackend = go
+      ? renderGoBackend(
+          app.framework,
+          serviceName,
+          `github.com/${config.project.author}/${config.project.name}/${relBase}`,
+          goContracts
+            ? {
+                module: `github.com/${config.project.author}/${config.project.name}/packages/${goContracts.name}`,
+                directory: goContracts.name,
+              }
+            : undefined,
+        )
+      : null;
+    const sharedRust = config.workspace.packages.find(
+      (pkg) => pkg.language === 'rust' && (pkg.kind === 'contracts' || pkg.name === 'contracts'),
     );
+    const backend =
+      goBackend ??
+      renderRustBackend(
+        app.framework,
+        serviceName,
+        sharedRust
+          ? {
+              name: rustPackageName(config.project.name, sharedRust.name),
+              directory: sharedRust.name,
+            }
+          : undefined,
+      );
+    const manifest = go ? 'go.mod' : 'Cargo.toml';
+    const source = go ? 'main.go' : 'src/main.rs';
+    await fs.writeFile(path.join(appDir, manifest), backend.manifest);
+    await fs.writeFile(path.join(appDir, source), backend.source);
+    if (goBackend) {
+      await fs.writeFile(path.join(appDir, 'main_test.go'), goBackend.test);
+      if (config.architecture.pattern !== 'hexagonal') created.push(`${relBase}/main_test.go`);
+    }
+    if (config.architecture.pattern === 'hexagonal') {
+      const layoutFiles = await scaffoldHexagonalBackend(
+        appDir,
+        go ? 'golang' : 'rust',
+        `github.com/${config.project.author}/${config.project.name}/${relBase}`,
+        backend.source,
+        goBackend?.test,
+      );
+      created.push(...layoutFiles.map((file) => `${relBase}/${file}`));
+    }
     await fs.writeFile(
       path.join(appDir, 'project.json'),
-      `${JSON.stringify(buildProjectJson(scope, app.name, 'application', false), null, 2)}\n`,
-      'utf-8',
+      `${JSON.stringify(buildProjectJson(scope, app.name, 'application', app), null, 2)}\n`,
     );
     await fs.writeFile(
       path.join(appDir, 'README.md'),
-      `# ${app.name}\n\nRust (${app.framework}) Backend Service exposing \`GET /health\`.\n`,
-      'utf-8',
+      `# ${app.name}\n\n${app.language} (${app.framework}) HTTP service exposing GET /health. Set PORT to override 4000. Run via Nx start/dev/build/test targets.\n`,
     );
-    created.push(
-      `${relBase}/Cargo.toml`,
-      `${relBase}/src/main.rs`,
+    return [
+      ...created,
+      `${relBase}/${manifest}`,
+      `${relBase}/${source}`,
       `${relBase}/project.json`,
       `${relBase}/README.md`,
-    );
-    return created;
+    ];
   }
 
   await fs.mkdir(path.join(appDir, 'src', '__tests__'), { recursive: true });
-  const contractsPkgName = hasContracts ? `${scope}/contracts` : null;
   const backend = renderTsBackendApp(app.framework, serviceName, contractsPkgName);
+  await fs.writeFile(
+    path.join(appDir, 'vitest.config.ts'),
+    `import base from '../../vitest.config.js';
+// Server startup is verified by the generated-server E2E suite; route behavior is covered here.
+export default { ...base, test: { ...base.test, coverage: { ...base.test?.coverage, exclude: [...(base.test?.coverage?.exclude ?? []), 'src/index.ts'] } } };\n`,
+  );
+  created.push(`${relBase}/vitest.config.ts`);
   const wsVer = getWorkspaceDepVersion(config.stack.packageManager);
 
   const pkgJson = {
@@ -619,9 +673,9 @@ func main() {
     type: 'module',
     main: 'dist/index.js',
     scripts: {
-      dev: 'tsx watch src/index.ts',
+      dev: app.framework === 'elysia' ? 'bun --watch src/index.ts' : 'tsx watch src/index.ts',
       build: 'tsc -p tsconfig.json',
-      start: 'node dist/index.js',
+      start: app.framework === 'elysia' ? 'bun dist/index.js' : 'node dist/index.js',
       typecheck: 'tsc --noEmit -p tsconfig.json',
       test: 'vitest run',
     },
@@ -659,7 +713,7 @@ func main() {
   );
   await fs.writeFile(
     path.join(appDir, 'project.json'),
-    `${JSON.stringify(buildProjectJson(scope, app.name, 'application', true), null, 2)}\n`,
+    `${JSON.stringify(buildProjectJson(scope, app.name, 'application', app), null, 2)}\n`,
     'utf-8',
   );
   await fs.writeFile(path.join(appDir, 'src', 'app.ts'), backend.appCode, 'utf-8');
@@ -667,7 +721,7 @@ func main() {
   await fs.writeFile(
     path.join(appDir, 'src', '__tests__', 'health.test.ts'),
     `import { describe, it, expect } from 'vitest';
-import { getHealthResponse } from '../app.js';
+import { createApp, getHealthResponse } from '../app.js';
 
 describe('${serviceName} GET /health endpoint', () => {
   it('returns an ok health response matching the shared contract', () => {
@@ -676,6 +730,7 @@ describe('${serviceName} GET /health endpoint', () => {
     expect(res.service).toBe('${serviceName}');
     expect(res.version).toBe('0.1.0');
   });
+${renderBackendHttpTest(app.framework)}
 });
 `,
     'utf-8',
@@ -703,13 +758,12 @@ async function scaffoldWebSampleApp(
   relBase: string,
   app: WorkspaceEntry,
   config: BootstrapConfig,
-  hasContracts: boolean,
+  contractsPkgName: string | null,
   hasUiWeb: boolean,
 ): Promise<string[]> {
   const created: string[] = [];
   const scope = `@${config.project.name}`;
   const wsVer = getWorkspaceDepVersion(config.stack.packageManager);
-  const contractsPkgName = hasContracts ? `${scope}/contracts` : null;
 
   if (app.framework === 'nextjs') {
     await fs.mkdir(path.join(appDir, 'src', 'app'), { recursive: true });
@@ -736,6 +790,8 @@ async function scaffoldWebSampleApp(
         'react-dom': getPinnedVersion('react-dom'),
       },
       devDependencies: {
+        'react-test-renderer': getPinnedVersion('react-test-renderer'),
+        '@types/react-test-renderer': getPinnedVersion('@types/react-test-renderer'),
         '@types/node': getPinnedVersion('@types/node'),
         '@types/react': getPinnedVersion('@types/react'),
         '@types/react-dom': getPinnedVersion('@types/react-dom'),
@@ -754,6 +810,10 @@ async function scaffoldWebSampleApp(
       `import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
+  async rewrites() {
+    const api = (process.env.API_URL ?? 'http://127.0.0.1:4000').replace(/\\/$/, '');
+    return [{ source: '/health', destination: \`\${api}/health\` }];
+  },
   transpilePackages: [${[contractsPkgName, hasUiWeb ? `${scope}/ui-web` : null]
     .filter(Boolean)
     .map((p) => `'${p}'`)
@@ -784,39 +844,22 @@ export default nextConfig;
     );
     await fs.writeFile(
       path.join(appDir, 'project.json'),
-      `${JSON.stringify(
-        {
-          name: `${scope}/${app.name}`,
-          projectType: 'application',
-          sourceRoot: `${relBase}/src`,
-          targets: {
-            build: { executor: 'nx:run-commands', options: { command: 'next build' } },
-            typecheck: {
-              executor: 'nx:run-commands',
-              options: { command: 'tsc --noEmit -p tsconfig.json' },
-            },
-            test: { executor: 'nx:run-commands', options: { command: 'vitest run' } },
-          },
-        },
-        null,
-        2,
-      )}\n`,
-      'utf-8',
+      `${JSON.stringify(buildProjectJson(scope, app.name, 'application', app), null, 2)}\n`,
     );
     await fs.writeFile(
       path.join(appDir, 'src', 'app', 'layout.tsx'),
       `import type { Metadata } from 'next';
-import React from 'react';
+import type React from 'react';
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: '${config.project.name} — Web Sample App',
-  description: '${config.project.description}',
+  description: ${JSON.stringify(config.project.description)},
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({ children }: { children?: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <body style={{ fontFamily: 'system-ui, sans-serif', margin: 0, padding: '2rem' }}>
@@ -829,95 +872,27 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       'utf-8',
     );
 
-    const healthImport = contractsPkgName
-      ? `import { HEALTH_ENDPOINT_PATH, type HealthResponse } from '${contractsPkgName}';`
-      : `const HEALTH_ENDPOINT_PATH = '/health';\ntype HealthResponse = { status: string; service: string; version: string; timestamp: string };`;
-
     await fs.writeFile(
-      path.join(appDir, 'src', 'components', 'health-panel.tsx'),
-      `'use client';
-
-import React, { useEffect, useState } from 'react';
-${healthImport}
-
-export function HealthPanel({ apiBaseUrl }: { apiBaseUrl: string }) {
-  const [health, setHealth] = useState<HealthResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch(\`\${apiBaseUrl}\${HEALTH_ENDPOINT_PATH}\`)
-      .then((r) => r.json() as Promise<HealthResponse>)
-      .then((data) => {
-        if (!cancelled) setHealth(data);
-      })
-      .catch(() => {
-        if (!cancelled) setError('API offline — start apps/api to inspect live /health status.');
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [apiBaseUrl]);
-
-  return (
-    <section aria-label="Backend Health Status">
-      <h2>Backend Health ({HEALTH_ENDPOINT_PATH})</h2>
-      {health ? (
-        <pre>{JSON.stringify(health, null, 2)}</pre>
-      ) : (
-        <p>{error ?? 'Checking backend health...'}</p>
-      )}
-    </section>
-  );
-}
-`,
-      'utf-8',
+      path.join(appDir, 'src/index.ts'),
+      `export const WEB_APP_INFO = { project: '${config.project.name}', framework: 'nextjs', healthEndpoint: '/health', architecture: '${config.architecture.pattern}' } as const;\nexport const APP_CONFIG_SUMMARY = WEB_APP_INFO;\n`,
     );
-
+    created.push(
+      ...(await scaffoldWebHealthPanel(appDir, contractsPkgName, true)).map(
+        (file) => `${relBase}/${file}`,
+      ),
+    );
     await fs.writeFile(
-      path.join(appDir, 'src', 'app', 'page.tsx'),
-      `import React from 'react';
-import { HealthPanel } from '../components/health-panel';
-
-export const APP_CONFIG_SUMMARY = {
-  project: '${config.project.name}',
-  architecture: '${config.architecture.pattern}',
-  packageManager: '${config.stack.packageManager}',
-  linter: '${resolveRootLinter(config)}',
-} as const;
-
-export default function HomePage() {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
-  return (
-    <main>
-      <h1>{APP_CONFIG_SUMMARY.project}</h1>
-      <p>
-        Skeleton Web Sample App ({APP_CONFIG_SUMMARY.architecture} architecture •{' '}
-        {APP_CONFIG_SUMMARY.packageManager})
-      </p>
-      <HealthPanel apiBaseUrl={apiUrl} />
-    </main>
-  );
-}
-`,
-      'utf-8',
+      path.join(appDir, 'vitest.config.ts'),
+      "export { default } from '../../vitest.config.js';\n",
     );
-
     await fs.writeFile(
-      path.join(appDir, 'src', '__tests__', 'page.test.ts'),
-      `import { describe, it, expect } from 'vitest';
-import { APP_CONFIG_SUMMARY } from '../app/page';
-
-describe('${scope}/${app.name} web sample app', () => {
-  it('exposes the chosen project parameters in the skeleton summary', () => {
-    expect(APP_CONFIG_SUMMARY.project).toBe('${config.project.name}');
-    expect(APP_CONFIG_SUMMARY.architecture).toBe('${config.architecture.pattern}');
-  });
-});
-`,
-      'utf-8',
+      path.join(appDir, 'src/app/page.tsx'),
+      `import React from 'react';\nimport { App } from '../app';\nexport default function HomePage() { return <App />; }\n`,
     );
-
+    await fs.writeFile(
+      path.join(appDir, 'src/__tests__/page.test.ts'),
+      `import React from 'react';\nimport { renderToStaticMarkup } from 'react-dom/server';\nimport { describe, it, expect } from 'vitest';\nimport HomePage from '../app/page';\nimport RootLayout from '../app/layout';\nimport { APP_CONFIG_SUMMARY } from '../index.js';\ndescribe('homepage', () => { it('renders the project and health action', () => { expect(APP_CONFIG_SUMMARY.architecture).toBe('${config.architecture.pattern}'); const html = renderToStaticMarkup(React.createElement(RootLayout, null, React.createElement(HomePage))); expect(html).toContain('${config.project.name}'); expect(html).toContain('Check API health'); }); });\n`,
+    );
     await fs.writeFile(
       path.join(appDir, 'README.md'),
       `# ${scope}/${app.name}\n\nNext.js Web Sample App wired to \`${contractsPkgName ?? 'local contracts'}\` and backend \`GET /health\`.\n`,
@@ -931,7 +906,8 @@ describe('${scope}/${app.name} web sample app', () => {
       `${relBase}/project.json`,
       `${relBase}/src/app/layout.tsx`,
       `${relBase}/src/app/page.tsx`,
-      `${relBase}/src/components/health-panel.tsx`,
+      `${relBase}/src/index.ts`,
+      `${relBase}/vitest.config.ts`,
       `${relBase}/src/__tests__/page.test.ts`,
       `${relBase}/README.md`,
     );
@@ -948,20 +924,31 @@ describe('${scope}/${app.name} web sample app', () => {
     scripts: {
       dev: app.framework === 'nuxtjs' ? 'nuxt dev' : 'vite',
       build: app.framework === 'nuxtjs' ? 'nuxt build' : 'vite build',
-      typecheck: 'tsc --noEmit -p tsconfig.json',
+      typecheck: app.framework === 'nuxtjs' ? 'nuxt typecheck' : 'tsc --noEmit -p tsconfig.json',
       test: 'vitest run',
+      start: app.framework === 'nuxtjs' ? 'nuxt start' : 'vite preview',
     },
     dependencies: {
       ...(contractsPkgName ? { [contractsPkgName]: wsVer } : {}),
       ...(app.framework === 'nuxtjs'
-        ? { nuxt: getPinnedVersion('nuxt') }
+        ? { nuxt: getPinnedVersion('nuxt'), vue: getPinnedVersion('vue') }
         : {
             react: getPinnedVersion('react'),
             'react-dom': getPinnedVersion('react-dom'),
           }),
     },
     devDependencies: {
-      ...(app.framework !== 'nuxtjs' ? { vite: getPinnedVersion('vite') } : {}),
+      ...(app.framework !== 'nuxtjs'
+        ? { vite: getPinnedVersion('vite') }
+        : { 'vue-tsc': getPinnedVersion('vue-tsc') }),
+      ...(app.framework === 'react-vite'
+        ? {
+            'react-test-renderer': getPinnedVersion('react-test-renderer'),
+            '@types/react-test-renderer': getPinnedVersion('@types/react-test-renderer'),
+          }
+        : {}),
+      '@types/react': getPinnedVersion('@types/react'),
+      '@types/react-dom': getPinnedVersion('@types/react-dom'),
       typescript: getPinnedVersion('typescript'),
       vitest: getPinnedVersion('vitest'),
     },
@@ -977,7 +964,13 @@ describe('${scope}/${app.name} web sample app', () => {
     `${JSON.stringify(
       {
         extends: '../../tsconfig.base.json',
-        compilerOptions: { jsx: 'react-jsx', outDir: 'dist', rootDir: 'src' },
+        compilerOptions: {
+          jsx: 'react-jsx',
+          module: 'ESNext',
+          moduleResolution: 'Bundler',
+          lib: ['ES2022', 'DOM', 'DOM.Iterable'],
+          noEmit: true,
+        },
         include: ['src/**/*'],
       },
       null,
@@ -987,7 +980,7 @@ describe('${scope}/${app.name} web sample app', () => {
   );
   await fs.writeFile(
     path.join(appDir, 'project.json'),
-    `${JSON.stringify(buildProjectJson(scope, app.name, 'application', true), null, 2)}\n`,
+    `${JSON.stringify(buildProjectJson(scope, app.name, 'application', app), null, 2)}\n`,
     'utf-8',
   );
   await fs.writeFile(
@@ -1014,6 +1007,42 @@ describe('${scope}/${app.name} web sample app', () => {
     `${relBase}/src/__tests__/app.test.ts`,
     `${relBase}/README.md`,
   );
+  if (app.framework === 'react-vite') {
+    created.push(
+      ...(await scaffoldViteEntry(appDir, config.project.name, contractsPkgName)).map(
+        (file) => `${relBase}/${file}`,
+      ),
+    );
+  }
+  if (app.framework === 'nuxtjs') {
+    await fs.writeFile(
+      path.join(appDir, 'nuxt.config.ts'),
+      `export default defineNuxtConfig({ srcDir: 'src/', compatibilityDate: '2025-04-01', devtools: { enabled: false }, nitro: { routeRules: { '/health': { proxy: \`\${process.env.API_URL ?? 'http://127.0.0.1:4000'}/health\` } } } });\n`,
+    );
+    await fs.writeFile(
+      path.join(appDir, 'tsconfig.json'),
+      JSON.stringify({ extends: './.nuxt/tsconfig.json' }, null, 2),
+    );
+    await fs.writeFile(
+      path.join(appDir, 'src/app.vue'),
+      `<script setup lang="ts">
+import { ref } from 'vue';
+${contractsPkgName ? `import { HealthResponseSchema } from '${contractsPkgName}';` : ''}
+const status = ref('Not connected');
+async function checkHealth() {
+  try {
+    const response = await fetch('/health');
+    if (!response.ok) throw new Error(\`API returned HTTP \${response.status}\`);
+    const payload: unknown = await response.json();
+    ${contractsPkgName ? `const parsed = HealthResponseSchema.parse(payload); status.value = \`\${parsed.service}: \${parsed.status}\`;` : `if (!payload || typeof payload !== 'object' || !('status' in payload) || typeof payload.status !== 'string') throw new Error('Invalid health response'); status.value = payload.status;`}
+  } catch (error) { status.value = error instanceof Error ? error.message : 'Cannot reach API'; }
+}
+</script>
+<template><main><h1>${config.project.name}</h1><output>{{ status }}</output><button type="button" @click="checkHealth">Check API health</button></main></template>
+`,
+    );
+    created.push(`${relBase}/nuxt.config.ts`, `${relBase}/src/app.vue`);
+  }
   return created;
 }
 
@@ -1038,7 +1067,7 @@ async function scaffoldGenericWorkspace(
     );
     await fs.writeFile(
       path.join(dir, 'project.json'),
-      `${JSON.stringify(buildProjectJson(scope, entry.name, projectType, false), null, 2)}\n`,
+      `${JSON.stringify(buildProjectJson(scope, entry.name, projectType, entry), null, 2)}\n`,
       'utf-8',
     );
     await fs.writeFile(
@@ -1063,12 +1092,16 @@ async function scaffoldGenericWorkspace(
     );
     await fs.writeFile(
       path.join(dir, 'lib.go'),
-      `package ${entry.name.replace(/-/g, '_')}\n\nfunc Name() string {\n\treturn "${entry.name}"\n}\n`,
+      `package ${entry.name.replace(/-/g, '_')}\n\nfunc Name() string {\n\treturn "${entry.name}"\n}\n${entry.kind === 'contracts' || entry.name === 'contracts' ? `\n${GO_HEALTH_RESPONSE}\n` : ''}`,
       'utf-8',
     );
     await fs.writeFile(
+      path.join(dir, 'lib_test.go'),
+      `package ${entry.name.replace(/-/g, '_')}\nimport "testing"\nfunc TestName(t *testing.T) { if Name() != "${entry.name}" { t.Fatal("unexpected package name") } }\n`,
+    );
+    await fs.writeFile(
       path.join(dir, 'project.json'),
-      `${JSON.stringify(buildProjectJson(scope, entry.name, projectType, false), null, 2)}\n`,
+      `${JSON.stringify(buildProjectJson(scope, entry.name, projectType, entry), null, 2)}\n`,
       'utf-8',
     );
     await fs.writeFile(
@@ -1079,6 +1112,7 @@ async function scaffoldGenericWorkspace(
     created.push(
       `${relBase}/go.mod`,
       `${relBase}/lib.go`,
+      `${relBase}/lib_test.go`,
       `${relBase}/project.json`,
       `${relBase}/README.md`,
     );
@@ -1089,17 +1123,17 @@ async function scaffoldGenericWorkspace(
     await fs.mkdir(path.join(dir, 'src'), { recursive: true });
     await fs.writeFile(
       path.join(dir, 'Cargo.toml'),
-      `[package]\nname = "${config.project.name}-${entry.name}"\nversion = "0.1.0"\nedition = "2021"\n`,
+      `[package]\nname = "${rustPackageName(config.project.name, entry.name)}"\nversion = "0.1.0"\nedition = "2021"\n`,
       'utf-8',
     );
     await fs.writeFile(
       path.join(dir, 'src', 'lib.rs'),
-      `pub fn workspace_name() -> &'static str {\n    "${entry.name}"\n}\n`,
+      `pub fn workspace_name() -> &'static str {\n    "${entry.name}"\n}\n\n#[cfg(test)]\nmod tests { #[test] fn package_name() { assert_eq!(super::workspace_name(), "${entry.name}"); } }\n`,
       'utf-8',
     );
     await fs.writeFile(
       path.join(dir, 'project.json'),
-      `${JSON.stringify(buildProjectJson(scope, entry.name, projectType, false), null, 2)}\n`,
+      `${JSON.stringify(buildProjectJson(scope, entry.name, projectType, entry), null, 2)}\n`,
       'utf-8',
     );
     await fs.writeFile(
@@ -1135,9 +1169,19 @@ async function scaffoldGenericWorkspace(
       build: 'tsc -p tsconfig.json',
       typecheck: 'tsc --noEmit -p tsconfig.json',
       test: 'vitest run',
+      ...(entry.framework === 'ink' && bucket === 'app'
+        ? { start: 'node dist/main.js', dev: 'tsx watch src/main.tsx' }
+        : {}),
     },
     ...(Object.keys(deps).length > 0 ? { dependencies: deps } : {}),
     devDependencies: {
+      ...(entry.framework === 'ink'
+        ? {
+            tsx: getPinnedVersion('tsx'),
+            '@types/react': getPinnedVersion('@types/react'),
+            '@types/node': getPinnedVersion('@types/node'),
+          }
+        : {}),
       typescript: getPinnedVersion('typescript'),
       vitest: getPinnedVersion('vitest'),
     },
@@ -1153,7 +1197,11 @@ async function scaffoldGenericWorkspace(
     `${JSON.stringify(
       {
         extends: '../../tsconfig.base.json',
-        compilerOptions: { outDir: 'dist', rootDir: 'src' },
+        compilerOptions: {
+          outDir: 'dist',
+          rootDir: 'src',
+          ...(entry.framework === 'ink' ? { jsx: 'react-jsx' } : {}),
+        },
         include: ['src/**/*'],
         exclude: ['src/**/__tests__/**'],
       },
@@ -1191,6 +1239,13 @@ async function scaffoldGenericWorkspace(
     `${relBase}/src/__tests__/${entry.name}.test.ts`,
     `${relBase}/README.md`,
   );
+  if (entry.framework === 'ink' && bucket === 'app') {
+    await fs.writeFile(
+      path.join(dir, 'src/main.tsx'),
+      `import React from 'react';\nimport { render, Text } from 'ink';\nimport { describePackage } from './index.js';\nconst app = render(<Text>{describePackage()} ready</Text>);\nconst exit = app.waitUntilExit();\napp.unmount();\nawait exit;\n`,
+    );
+    created.push(`${relBase}/src/main.tsx`);
+  }
   return created;
 }
 
@@ -1203,6 +1258,43 @@ export async function scaffoldWorkspacePackage(
   const relBase = `packages/${pkg.name}`;
   const kind = inferWorkspaceKind(pkg, 'package');
 
+  if (pkg.language === 'rust' && (kind === 'contracts' || pkg.name === 'contracts')) {
+    const bridge =
+      config.stack.frameworks.includes('tauri') && config.stack.languages.includes('typescript');
+    const created = bridge ? await scaffoldContractsPackage(pkgDir, relBase, pkg, config) : [];
+    await scaffoldRustContracts(pkgDir, rustPackageName(config.project.name, pkg.name));
+    const project = buildProjectJson(`@${config.project.name}`, pkg.name, 'library', pkg);
+    if (bridge) {
+      const native = nativeTargets(relBase, pkg, false);
+      for (const target of ['build', 'test', 'typecheck']) {
+        native[`${target}-types`] = {
+          executor: 'nx:run-commands',
+          options: {
+            command: `npm run ${target}`,
+            cwd: relBase,
+          },
+        };
+        const existing = native[target];
+        if (typeof existing === 'object' && existing !== null)
+          native[target] = { ...existing, dependsOn: [`${target}-types`] };
+      }
+      project.targets = native;
+    }
+    await fs.writeFile(path.join(pkgDir, 'project.json'), `${JSON.stringify(project, null, 2)}\n`);
+    await fs.writeFile(
+      path.join(pkgDir, 'README.md'),
+      `# ${pkg.name}\n\nShared Rust health DTOs with serde JSON support.${bridge ? ' TypeScript/Zod exports provide the same wire contract for web consumers.' : ''}\n`,
+    );
+    return [
+      ...new Set([
+        ...created,
+        `${relBase}/Cargo.toml`,
+        `${relBase}/src/lib.rs`,
+        `${relBase}/project.json`,
+        `${relBase}/README.md`,
+      ]),
+    ];
+  }
   if (kind === 'contracts' && pkg.language === 'typescript') {
     return scaffoldContractsPackage(pkgDir, relBase, pkg, config);
   }
@@ -1213,7 +1305,7 @@ export async function scaffoldWorkspaceApp(
   targetDir: string,
   app: WorkspaceEntry,
   config: BootstrapConfig,
-  hasContracts: boolean,
+  contractsPkgName: string | null,
   hasUiWeb: boolean,
 ): Promise<string[]> {
   const appDir = path.join(targetDir, 'apps', app.name);
@@ -1224,10 +1316,10 @@ export async function scaffoldWorkspaceApp(
     return scaffoldGenericWorkspace(appDir, relBase, app, 'app', config);
   }
   if (kind === 'backend') {
-    return scaffoldBackendApp(appDir, relBase, app, config, hasContracts);
+    return scaffoldBackendApp(appDir, relBase, app, config, contractsPkgName);
   }
   if (kind === 'web') {
-    return scaffoldWebSampleApp(appDir, relBase, app, config, hasContracts, hasUiWeb);
+    return scaffoldWebSampleApp(appDir, relBase, app, config, contractsPkgName, hasUiWeb);
   }
   return scaffoldGenericWorkspace(appDir, relBase, app, 'app', config);
 }
@@ -1282,7 +1374,7 @@ run_build() {
 run_test() {
   log "6/6 Running test suite & pattern validation gate..."
   \${RUN} test
-  npx little-bootstrapper validate
+  node scripts/validate.mjs
 }
 
 case "\${MODE}" in
@@ -1358,7 +1450,7 @@ Run the full standalone verification pipeline outside the CLI at any time:
 | 3. Lint | \`--check\` | \`${runCmd} lint\` | Runs root-only \`${linter}\` rules across all workspaces |
 | 4. Typecheck | \`--check\` | \`${runCmd} typecheck\` | Verifies strict TypeScript contracts across apps & packages |
 | 5. Build | \`--build\` | \`${runCmd} build\` | Builds contracts, UI packages, backend API, and web app |
-| 6. Test & Gate | \`--test\` | \`${runCmd} test && npx little-bootstrapper validate\` | Executes unit tests and little.bootstrapper pattern checks |
+| 6. Test & Gate | \`--test\` | \`${runCmd} test && node scripts/validate.mjs\` | Executes unit tests and little.bootstrapper pattern checks |
 
 ## 4. Starter Product Verification
 

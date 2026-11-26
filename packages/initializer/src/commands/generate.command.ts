@@ -1,6 +1,6 @@
 import { generateModule, loadBootstrapConfig } from '../modules/generators/index.js';
 import { GenerateCommandArgsSchema, formatZodError } from '../modules/validation/index.js';
-import type { ParsedArgs } from './args.js';
+import { getFlagValue, type ParsedArgs } from './args.js';
 
 export async function runGenerateCommand(
   parsed: ParsedArgs,
@@ -21,7 +21,13 @@ export async function runGenerateCommand(
     return { handled: true, exitCode: 1 };
   }
 
-  const files = await generateModule(parsed.cwd, validated.data.moduleName, config);
+  const files = await generateModule(
+    parsed.cwd,
+    validated.data.moduleName,
+    config,
+    undefined,
+    getFlagValue(parsed.rawArgs, '--workspace'),
+  );
   console.log(`Good news, everyone! Generated module "${validated.data.moduleName}":`);
   for (const f of files) {
     console.log(`  + ${f}`);

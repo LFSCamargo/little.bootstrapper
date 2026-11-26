@@ -38,47 +38,44 @@ export async function generateMcpConfig(
     }
   }
 
-  // Merge cleanly if mcp.json already exists so user-approved servers aren't accidentally wiped
-  const rootMcpPath = path.join(targetDir, 'mcp.json');
-  let existingServers: Record<string, McpServerJsonEntry> = {};
-  try {
-    const existingRaw = await fs.readFile(rootMcpPath, 'utf-8');
-    const parsed = JSON.parse(existingRaw) as Partial<McpJsonFile>;
-    if (parsed.mcpServers && typeof parsed.mcpServers === 'object') {
-      existingServers = parsed.mcpServers;
-    }
-  } catch {
-    // No existing mcp.json yet
-  }
-
-  const payload: McpJsonFile = {
-    mcpServers: {
-      ...existingServers,
-      ...mcpServers,
-    },
-  };
-  const serialized = `${JSON.stringify(payload, null, 2)}\n`;
-
-  // 1. Canonical project root mcp.json
-  await fs.mkdir(targetDir, { recursive: true });
-  await fs.writeFile(rootMcpPath, serialized, 'utf-8');
-  filesWritten.push('mcp.json');
-
-  const agentSet = new Set(agents);
-
-  // 2. Cursor expects .cursor/mcp.json
-  if (agentSet.has('cursor')) {
-    const cursorPath = path.join(targetDir, '.cursor', 'mcp.json');
-    await fs.mkdir(path.dirname(cursorPath), { recursive: true });
-    await fs.writeFile(cursorPath, serialized, 'utf-8');
-    filesWritten.push('.cursor/mcp.json');
-  }
-
-  // 3. Claude Code reads .mcp.json at repo root
-  if (agentSet.has('claude')) {
-    const claudeMcpPath = path.join(targetDir, '.mcp.json');
-    await fs.writeFile(claudeMcpPath, serialized, 'utf-8');
-    filesWritten.push('.mcp.json');
+  // Read every destination before writing so a broken agent config remains recoverable.
+  const destinations = ['mcp.json'];
+  if (agents.includes('cursor')) destinations.push('.cursor/mcp.json');
+  if (agents.includes('claude')) destinations.push('.mcp.json');
+  const configs = await Promise.all(
+    destinations.map(async (file) => {
+      const raw = await fs
+        .readFile(path.join(targetDir, file), 'utf8')
+        .catch((error: NodeJS.ErrnoException) => {
+          if (error.code !== 'ENOENT') throw error;
+          return '{}';
+        });
+      const config = JSON.parse(raw);
+      if (
+        !config ||
+        typeof config !== 'object' ||
+        Array.isArray(config) ||
+        ('mcpServers' in config &&
+          (!config.mcpServers ||
+            typeof config.mcpServers !== 'object' ||
+            Array.isArray(config.mcpServers)))
+      ) {
+        throw new Error(`Invalid MCP configuration in ${file}`);
+      }
+      return config;
+    }),
+  );
+  for (const [index, file] of destinations.entries()) {
+    const config = configs[index];
+    const servers = { ...configs[0].mcpServers, ...config.mcpServers, ...mcpServers };
+    const destination = path.join(targetDir, file);
+    await fs.mkdir(path.dirname(destination), { recursive: true });
+    await fs.writeFile(
+      destination,
+      JSON.stringify({ ...config, mcpServers: servers }, null, 2) + '\n',
+      'utf8',
+    );
+    filesWritten.push(file);
   }
 
   // 4. Append any required MCP env vars into .env.example (never hardcode secrets!)

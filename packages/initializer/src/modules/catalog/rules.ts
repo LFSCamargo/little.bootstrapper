@@ -126,7 +126,7 @@ export const MARKETPLACE_RULES: MarketplaceRule[] = [
     description: 'Keep all shared React Ink terminal components inside packages/ui-cli',
     templatePath: 'templates/rules/core/cli-ui-components.md',
     tags: ['cli', 'ui', 'ink'],
-    body: `- All reusable CLI UI components (React Ink banners, MultiSelects, FolderPreview, ASCII frames) MUST live inside \`packages/ui-cli\`.`,
+    body: `- All reusable CLI UI components (React Ink banners, MultiSelects, FolderPreview, ASCII frames) MUST live inside the CLI app (e.g., \`apps/cli\`) and be imported from \`@inkjs/ui\`.`,
   },
   {
     id: 'typescript-rules',
@@ -179,7 +179,7 @@ export const MARKETPLACE_RULES: MarketplaceRule[] = [
       'Use @inkjs/ui in packages/ui-cli, unmount-safe async/timers, TTY checks, no console.log in TUI, memoized lists, Zod inline validation',
     templatePath: 'templates/rules/frameworks/ink-anti-patterns.md',
     tags: ['ink', 'ink-ui', 'cli', 'react', 'framework'],
-    body: `- Use \`@inkjs/ui\` (\`Select\`, \`Spinner\`, \`ProgressBar\`, \`Alert\`, \`Badge\`, \`StatusMessage\`, \`ConfirmInput\`, \`ThemeProvider\`, \`extendTheme\`) inside \`packages/ui-cli\` instead of legacy Ink prompt wrappers.
+    body: `- Use \`@inkjs/ui\` (\`Select\`, \`Spinner\`, \`ProgressBar\`, \`Alert\`, \`Badge\`, \`StatusMessage\`, \`ConfirmInput\`, \`ThemeProvider\`, \`extendTheme\`) inside the CLI app instead of legacy Ink prompt wrappers.
 - Guard async \`useEffect\` calls with a \`cancelled\` cleanup flag, \`clearInterval()\` on animations, and \`.catch()\` error handling.
 - Check \`process.stdin.isTTY\` before \`render(<App />)\` so non-TTY pipes exit cleanly with helpful flags.
 - Never mix raw \`console.log\` inside active Ink components; memoize filtered/computed lists with \`useMemo\`.

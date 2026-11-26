@@ -23,16 +23,20 @@ export const KNOWN_VULNERABLE_VERSIONS: Record<string, { versions: string[]; adv
 export const AUDITED_VERSIONS: Record<string, AuditedPackageVersion> = {
   // Core & Monorepo
   nx: audited('nx', '20.8.2'),
+  '@nx-go/nx-go': audited('@nx-go/nx-go', '3.3.1'),
+  '@monodon/rust': audited('@monodon/rust', '2.3.0'),
   typescript: audited('typescript', '5.8.3'),
-  tsx: audited('tsx', '4.19.3'),
+  tsx: audited('tsx', '4.23.15'),
   '@types/node': audited('@types/node', '22.14.0'),
-  '@types/react': audited('@types/react', '18.3.18'),
-  '@types/react-dom': audited('@types/react-dom', '18.3.5'),
+  '@types/react': audited('@types/react', '19.3.0'),
+  '@types/react-dom': audited('@types/react-dom', '19.3.0'),
 
   // React & Ink
-  react: audited('react', '18.3.1'),
-  'react-dom': audited('react-dom', '18.3.1'),
-  ink: audited('ink', '5.1.0'),
+  react: audited('react', '19.3.1'),
+  'react-dom': audited('react-dom', '19.3.1'),
+  'react-test-renderer': audited('react-test-renderer', '19.3.1'),
+  '@types/react-test-renderer': audited('@types/react-test-renderer', '19.3.1'),
+  ink: audited('ink', '6.8.0'),
   '@inkjs/ui': audited('@inkjs/ui', '2.0.0'),
   'ink-select-input': audited('ink-select-input', '6.0.0'),
   'ink-spinner': audited('ink-spinner', '5.0.0'),
@@ -65,6 +69,9 @@ export const AUDITED_VERSIONS: Record<string, AuditedPackageVersion> = {
 
   // Linting & Formatting
   eslint: audited('eslint', '9.25.1'),
+  '@typescript-eslint/parser': audited('@typescript-eslint/parser', '8.31.0'),
+  'vue-tsc': audited('vue-tsc', '2.2.8'),
+  vue: audited('vue', '3.5.13'),
   '@biomejs/biome': audited('@biomejs/biome', '1.9.4'),
   oxlint: audited('oxlint', '0.16.7'),
   prettier: audited('prettier', '3.5.3'),

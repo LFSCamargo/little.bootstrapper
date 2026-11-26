@@ -12,7 +12,7 @@ export function runHelpCommand(parsed: ParsedArgs): { handled: boolean; exitCode
     console.log('Usage: little-bootstrapper [command] [options]\n');
     console.log('Commands:');
     console.log(
-      '  init [--yes] [--name <n>] [--domains <d>] [--no-coverage] [--coverage-threshold <0-100>] [--out <dir>]',
+      '  init [--yes | --dry-run] [--name <n>] [--languages <ids>] [--frameworks <ids>] [--pm <manager>] [--domains <d>] [--no-coverage] [--coverage-threshold <0-100>] [--out <dir>]',
     );
     console.log(
       '                                                          Initialize Setup (CORE) + rules & coverage',
@@ -24,7 +24,7 @@ export function runHelpCommand(parsed: ParsedArgs): { handled: boolean; exitCode
       '  mcps [--list] [--recommend] [--search <q>] [--install]  Verified Safe MCP Marketplace (26 audited MCPs)',
     );
     console.log(
-      '  normalize [--apply] [--agent <a>] [--dir <dir>]         Normalize Existing Setup (AI agents/tools/MCPs)',
+      '  normalize [--check | --apply] [--agent <a>] [--dir <dir>]         Normalize Existing Setup (AI agents/tools/MCPs)',
     );
     console.log(
       '  update [--apply] [--dir <dir>]                          Update Helper (audit, flag CVEs & pin versions)',

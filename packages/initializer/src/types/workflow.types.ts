@@ -51,6 +51,9 @@ export interface AuditedPackageVersion {
 
 export interface DetectedSetup {
   hasBootstrapConfig: boolean;
+  frameworks: Framework[];
+  workspace: BootstrapConfig['workspace'];
+  monorepo: boolean;
   packageManager: PackageManager | null;
   languages: Language[];
   agents: AIAgent[];

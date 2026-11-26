@@ -1,6 +1,17 @@
 import path from 'node:path';
 import type { BootstrapConfig } from '../types/index.js';
-import { ADDITIONAL_TOOLS, AI_AGENTS, DEFAULT_VERIFIED_MCPS } from '../modules/catalog/index.js';
+import {
+  ADDITIONAL_TOOLS,
+  AI_AGENTS,
+  DEFAULT_VERIFIED_MCPS,
+  defaultWorkspaces,
+  LANGUAGES,
+  recommendedFrameworks,
+} from '../modules/catalog/index.js';
+import {
+  validateInitialization,
+  requireEmptyDestination,
+} from '../modules/generators/initialization-safety.js';
 import { generateProject } from '../modules/generators/index.js';
 import {
   BootstrapConfigSchema,
@@ -14,7 +25,7 @@ export async function runInitCommand(
   parsed: ParsedArgs,
 ): Promise<{ handled: boolean; exitCode: number }> {
   const { rawArgs, cwd } = parsed;
-  if (!hasFlag(rawArgs, '--yes')) {
+  if (!hasFlag(rawArgs, '--yes', '--dry-run')) {
     return { handled: false, exitCode: 0 };
   }
 
@@ -28,7 +39,11 @@ export async function runInitCommand(
   const rawLinter = getFlagValue(rawArgs, '--linter') ?? 'eslint';
   const rawFrameworks = (
     getFlagValue(rawArgs, '--frameworks') ??
-    'hono,ink,nextjs,react-native,vitest,playwright,shadcn,aceternity-ui'
+    recommendedFrameworks(
+      rawLanguages.flatMap((id) =>
+        LANGUAGES.filter((language) => language.id === id).map((language) => language.id),
+      ),
+    ).join(',')
   )
     .split(',')
     .map((s) => s.trim())
@@ -73,7 +88,7 @@ export async function runInitCommand(
     ...(rawRules ? { rules: rawRules } : {}),
     coverageEnabled,
     ...(rawCoverageThreshold !== undefined ? { coverageThreshold: rawCoverageThreshold } : {}),
-    outDir: outFlag ? path.resolve(outFlag) : path.join(cwd, rawName),
+    outDir: outFlag ? path.resolve(cwd, outFlag) : path.join(cwd, rawName),
   });
 
   if (!validated.success) {
@@ -95,7 +110,7 @@ export async function runInitCommand(
       languages: args.languages,
       packageManager: args.packageManager,
       monorepo: args.monorepo,
-      useMakefiles: args.languages.some((l) => l !== 'typescript'),
+      useMakefiles: false,
       linter: args.linter ?? 'eslint',
       prettier: args.prettier ?? true,
       frameworks: args.frameworks,
@@ -105,21 +120,7 @@ export async function runInitCommand(
       domains: args.domains ?? ['general'],
       ...(args.rules ? { rules: args.rules } : {}),
     },
-    workspace: {
-      apps: [
-        {
-          name: 'api',
-          language: 'typescript',
-          framework:
-            args.packageManager === 'bun' && args.frameworks.includes('elysia') ? 'elysia' : 'hono',
-          kind: 'backend',
-        },
-        { name: 'web', language: 'typescript', framework: 'nextjs', kind: 'web' },
-      ],
-      packages: [
-        { name: 'contracts', language: 'typescript', framework: 'vitest', kind: 'contracts' },
-      ],
-    },
+    workspace: defaultWorkspaces(args.languages, args.frameworks, args.packageManager),
     architecture: {
       pattern: 'modular',
       folderOrganization: 'module-based',
@@ -138,6 +139,12 @@ export async function runInitCommand(
     },
   });
 
+  if (hasFlag(rawArgs, '--dry-run')) {
+    validateInitialization(config);
+    await requireEmptyDestination(args.outDir);
+    console.log(JSON.stringify({ targetDir: args.outDir, ...config }, null, 2));
+    return { handled: true, exitCode: 0 };
+  }
   const res = await generateProject(args.outDir, config);
   console.log(BENDER_MASCOT_ASCII);
   const coverageSummary = args.coverageEnabled

@@ -253,7 +253,7 @@ export async function validateProjectPatterns(targetDir: string): Promise<Patter
     const content = await fs.readFile(f, 'utf-8');
     if (rel.includes('/src/ui/')) {
       if (content.includes("from 'ink-select-input'") || content.includes("from 'ink-spinner'")) {
-        fwIssues.push(`${rel}: Use @inkjs/ui via packages/ui-cli instead of legacy Ink wrappers`);
+        fwIssues.push(`${rel}: Use @inkjs/ui inside the CLI app instead of legacy Ink wrappers`);
       }
       if (/\bconsole\.log\s*\(/.test(content)) {
         fwIssues.push(`${rel}: Avoid raw console.log() inside active React Ink TUI components`);
